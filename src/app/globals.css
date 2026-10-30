@@ -22,5 +22,25 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Landing page road scene. The rest of its palette lives in
+   src/components/road/palette.ts. */
+
+.road-scene {
+  /* UK motorway blue. */
+  --sign: #1d5bab;
+}
+
+/* Dark mode is dusk: the sign sits a little darker against the sunset. */
+@media (prefers-color-scheme: dark) {
+  .road-scene {
+    --sign: #1a52a0;
+  }
+}
+
+/* A faint sheen across the sign face, like retroreflective sheeting. */
+.road-sign {
+  background-image: linear-gradient(160deg, rgb(255 255 255 / 0.1), transparent 45%, rgb(0 0 0 / 0.08));
 }

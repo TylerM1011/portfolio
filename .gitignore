@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# raw source 3D assets (too large for GitHub; optimized copies are in public/models)
+/3dModels/
