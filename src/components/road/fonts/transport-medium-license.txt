@@ -1,0 +1,14 @@
+Font Information:
+* title:	Transport Medium (TrueType version by Nathaniel Porter)
+* source:	https://www.roads.org.uk/fonts
+* typeface:	Transport, designed by Jock Kinneir and Margaret Calvert for UK road signs
+
+Font License:
+* Transport Medium is subject to Crown Copyright, and this font contains public
+  sector information licensed under the Open Government Licence v1.0
+  (https://www.nationalarchives.gov.uk/doc/open-government-licence/version/1/).
+* requirements:	Attribution. The source page notes this version was intended for
+  private non-commercial use.
+
+Credit:
+Contains public sector information licensed under the Open Government Licence v1.0.

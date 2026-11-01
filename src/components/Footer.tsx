@@ -9,7 +9,8 @@ export default async function Footer() {
         <span>
           © {new Date().getFullYear()} {site.name}
         </span>
-        {/* Required by the 3D models' Creative Commons licenses. */}
+        {/* Required by the 3D models' Creative Commons licenses and the sign
+            font's Open Government Licence. */}
         <span className="flex flex-col gap-1 text-xs sm:items-end">
           <span>
             Car:{" "}
@@ -55,6 +56,15 @@ export default async function Footer() {
               className="underline-offset-2 hover:underline"
             >
               CC BY 4.0
+            </a>
+          </span>
+          <span>
+            Sign lettering: Transport Medium, Crown Copyright,{" "}
+            <a
+              href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/1/"
+              className="underline-offset-2 hover:underline"
+            >
+              Open Government Licence v1.0
             </a>
           </span>
         </span>

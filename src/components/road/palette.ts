@@ -17,6 +17,9 @@ export type Palette = {
   meadow: number;
   gantry: number;
   sign: number;
+  // Glow of the sign's retroreflective sheeting (faked), so it reads with
+  // the sun behind the gantry.
+  signGlow: number;
   hillFar: number;
   hillNear: number;
   cloud: number;
@@ -42,7 +45,8 @@ export const day: Palette = {
   fog: 0xe9d7bb,
   meadow: 0xf4f0d8,
   gantry: 0xa4adb7,
-  sign: 0x1d5bab,
+  sign: 0x00703c,
+  signGlow: 0.18,
   hillFar: 0x9db5a6,
   hillNear: 0x7f9f72,
   cloud: 0xfff4e6,
@@ -67,7 +71,8 @@ export const dusk: Palette = {
   fog: 0xc07862,
   meadow: 0xb0a088,
   gantry: 0x8a929d,
-  sign: 0x1a52a0,
+  sign: 0x00653a,
+  signGlow: 0.26,
   hillFar: 0x6a557e,
   hillNear: 0x4a5068,
   cloud: 0xc58a9a,

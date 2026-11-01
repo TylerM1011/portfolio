@@ -1,23 +1,27 @@
 import * as THREE from "three";
 import { day, dusk } from "./palette";
 import { createPost } from "./post";
+import { SW } from "./sign";
 import { disposeTree } from "./car";
 import { ROAD } from "./road";
-import { buildWorld, CAR_Z, SIGN } from "./world";
+import { buildWorld, CAR_Z, type GantryLayout } from "./world";
 
-// The HTML sign is layered over the canvas, so it would paint over the car if
-// the two ever overlapped on screen. They can't while the eye stays between
-// the car's roof (CAR_HEIGHT) and the sign's lower edge (1.075): everything above
-// the eye's horizontal plane lands on one side of the horizon line, and
-// everything below it on the other, whatever the camera's pitch or roll.
+// The HTML sign is layered over the canvas as the links, invisible over the
+// modelled signs, so it would catch the pointer over the car if the two ever
+// overlapped on screen. They can't while the eye stays between the car's roof
+// (CAR_HEIGHT) and the signs' lower edge (about 1.58, see layoutGantry):
+// everything above the eye's horizontal plane lands on one side of the
+// horizon line, and everything below it on the other, whatever the camera's
+// pitch or roll.
 const EYE_Y = 0.9;
 const EYE_Z = 2.2;
 const LOOK = new THREE.Vector3(0, 1, -12);
 const BASE_FOV = 40;
 const MAX_FOV = 68;
-// The sign element is laid out in em at 20px, 400px to a world unit.
+// The sign element is laid out in em, one stroke width (see sign.ts), at
+// 400px to a world unit.
 const SIGN_PX_PER_UNIT = 400;
-const SIGN_EM_PX = 20;
+const SIGN_EM_PX = SW * SIGN_PX_PER_UNIT;
 
 const INTRO_MS = 4200;
 const INTRO_FROM = new THREE.Vector3(3.4, 4.8, 10.5);
@@ -74,6 +78,7 @@ export type RoadOptions = {
   reducedMotion: boolean;
   intro: boolean;
   onIntroEnd: () => void;
+  sign: { font: string; gantry: GantryLayout };
 };
 
 export type RoadEngine = {
@@ -97,11 +102,11 @@ function objectCSS({ elements: e }: THREE.Matrix4) {
 }
 
 // On narrow screens, widen the lens and then back the camera off until the
-// sign fits across with a margin.
-function fitLens(aspect: number) {
-  const distance = EYE_Z - SIGN.z;
-  // The sign sits a little off-centre, so fit its farther edge.
-  const halfWidth = Math.abs(SIGN.x) + SIGN.width / 2 + 0.2;
+// signs fit across with a margin.
+function fitLens(aspect: number, sign: GantryLayout) {
+  const distance = EYE_Z - sign.z;
+  // The signs sit a little off-centre, so fit their farther edge.
+  const halfWidth = Math.max(-sign.left, sign.right) + 0.2;
   const needed = THREE.MathUtils.radToDeg(2 * Math.atan(halfWidth / distance / aspect));
   const fov = THREE.MathUtils.clamp(needed, BASE_FOV, MAX_FOV);
   const reach = Math.tan(THREE.MathUtils.degToRad(fov / 2)) * aspect;
@@ -128,7 +133,10 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
   const world = buildWorld({
     anisotropy: renderer.capabilities.getMaxAnisotropy(),
     detail: compact ? 0.45 : 1,
+    gantry: options.sign.gantry,
+    font: options.sign.font,
   });
+  const sign = options.sign.gantry;
   const { scene, car } = world;
   const camera = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.1, 3000);
   const { composer, grade } = createPost(renderer, scene, camera);
@@ -147,7 +155,7 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
 
   let width = 1;
   let height = 1;
-  let lens = fitLens(1);
+  let lens = fitLens(1, sign);
   function resize() {
     width = Math.max(1, el.container.clientWidth);
     height = Math.max(1, el.container.clientHeight);
@@ -157,7 +165,7 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
     composer.setPixelRatio(ratio);
     composer.setSize(width, height);
     camera.aspect = width / height;
-    lens = fitLens(camera.aspect);
+    lens = fitLens(camera.aspect, sign);
     el.camera.style.width = `${width}px`;
     el.camera.style.height = `${height}px`;
   }
@@ -180,10 +188,12 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
   window.addEventListener("pointermove", onPointer, { passive: true });
 
   // The sign is a fixed object in the world; only the camera moves around it.
+  // The scene draws it, so the HTML sign hides all but its focus rings (see
+  // globals.css).
   const signStyle = el.sign.style.cssText;
   const cameraStyle = el.camera.style.cssText;
   const signMatrix = new THREE.Matrix4().compose(
-    new THREE.Vector3(SIGN.x, SIGN.y, SIGN.z),
+    new THREE.Vector3((sign.left + sign.right) / 2, (sign.top + sign.bottom) / 2, sign.z),
     new THREE.Quaternion(),
     new THREE.Vector3().setScalar(1 / SIGN_PX_PER_UNIT),
   );
@@ -194,6 +204,7 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
     transform: objectCSS(signMatrix),
     opacity: "0",
   });
+  el.sign.setAttribute("data-modelled", "");
 
   const reduced = options.reducedMotion;
   let intro = options.intro && !reduced ? { start: -1 } : null;
@@ -255,7 +266,7 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
     let signOpacity = 1;
 
     // Establishing shot: a crane down from high behind the car, letterboxed,
-    // with the sign appearing once the eye has dropped below it.
+    // with the sign's links only taking the pointer once it has settled.
     if (intro) {
       if (intro.start < 0) intro.start = now;
       const t = clamp01((now - intro.start) / INTRO_MS);
@@ -337,6 +348,7 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
 
+    world.sign.setHighlight(drive?.lateral ?? hint, !!drive);
     const signal = drive?.lateral ?? hint ?? 0;
     const blink = signal !== 0 && Math.floor(time * 2.6) % 2 === 0;
     car.blinkers[0].visible = blink && signal < 0;
@@ -364,7 +376,7 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
 
     const focal = camera.projectionMatrix.elements[5] * (height / 2);
     el.camera.style.transform = `perspective(${focal}px) translateZ(${focal}px)${cameraCSS(camera.matrixWorldInverse)} translate(${width / 2}px,${height / 2}px)`;
-    el.sign.style.visibility = camera.position.z - SIGN.z < 0.35 ? "hidden" : "visible";
+    el.sign.style.visibility = camera.position.z - sign.z < 0.35 ? "hidden" : "visible";
     el.sign.style.opacity = String(signOpacity);
     el.sign.style.pointerEvents = signOpacity === 1 && !drive ? "auto" : "none";
     el.fade.style.opacity = String(fade);
@@ -402,6 +414,7 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
       renderer.forceContextLoss();
       canvas.remove();
       el.sign.style.cssText = signStyle;
+      el.sign.removeAttribute("data-modelled");
       el.camera.style.cssText = cameraStyle;
       el.fade.style.opacity = "";
       el.bars.removeAttribute("data-on");

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { createCar } from "./car";
 import { createForest } from "./forest";
 import { createRoad, ROAD } from "./road";
+import { createGantrySign, panelArt, SW, type GantryPanel, type SignItem } from "./sign";
 import { day, dusk, type Palette } from "./palette";
 
 // World units: the eye sits about 1 unit above the road and a metre is 0.44
@@ -15,24 +16,46 @@ const GROUND_Y = -0.02;
 export const GANTRY_Z = -3;
 // Posts on the nearside verge and in the central reservation.
 const GANTRY_POSTS = ROAD.gantryPosts;
-// Just above the sign panels, so the truss sits on top of them.
-const GANTRY_TOP = 2.0;
-// A UK motorway gantry sign in two panels (see RoadScene): the exit panel
-// over the nearside, and the lane panel spanning both lanes with a down
-// arrow over the centre of each. x ranges are left to right; the CSS sign
-// sits flush on the front faces of their backing plates.
-export const SIGN_PANELS = [
-  [-1.98, -0.83],
-  [-0.75, 2.35],
-] as const;
-export const SIGN = {
-  x: (SIGN_PANELS[0][0] + SIGN_PANELS[1][1]) / 2,
-  width: SIGN_PANELS[1][1] - SIGN_PANELS[0][0],
-  height: 0.72,
-  // The bottom edge stays at 1.075, above the camera's eye (see engine.ts).
-  y: 1.075 + 0.72 / 2,
-  z: GANTRY_Z + 0.157,
-};
+const GANTRY_TOP = 2.1;
+// The truss's two chords; the signs are centred on them, faces this far in
+// front of the truss.
+const CHORD_Y = [GANTRY_TOP - 0.17, GANTRY_TOP - 0.02];
+const TRUSS_MIDDLE = (CHORD_Y[0] + CHORD_Y[1]) / 2;
+const SIGN_FACE = 0.157;
+
+// Lays out the gantry's UK direction signs (see sign.ts), one per
+// destination: a lane drop sign centred over each lane and covering at least
+// three quarters of it (TSM 7, 9.1.4), and the lay-by exit off to their
+// left. Each is centred on the truss. x is left to right; the invisible CSS
+// sign spans the lot, flush on the faces.
+export function layoutGantry<T extends SignItem>(items: readonly T[]) {
+  const gap = 10 * SW;
+  const panels: GantryPanel<T>[] = [];
+  const top = (art: { height: number }) => TRUSS_MIDDLE + (art.height * SW) / 2;
+  items
+    .filter((item) => item.lateral >= 0)
+    .forEach((item, lane) => {
+      const art = panelArt(item, (0.75 * ROAD.lane) / SW);
+      const x = lane * ROAD.lane;
+      const half = (art.width * SW) / 2;
+      panels.push({ item, art, left: x - half, right: x + half, top: top(art) });
+    });
+  for (const item of items.filter((item) => item.lateral < 0).reverse()) {
+    const art = panelArt(item);
+    const right = (panels[0]?.left ?? 0) - gap;
+    panels.unshift({ item, art, left: right - art.width * SW, right, top: top(art) });
+  }
+  return {
+    panels,
+    left: panels[0].left,
+    right: panels[panels.length - 1].right,
+    top: Math.max(...panels.map((panel) => panel.top)),
+    bottom: Math.min(...panels.map((panel) => panel.top - panel.art.height * SW)),
+    z: GANTRY_Z + SIGN_FACE,
+  };
+}
+
+export type GantryLayout = ReturnType<typeof layoutGantry<SignItem>>;
 
 export const CAR_Z = -1.9;
 
@@ -168,7 +191,17 @@ const dustFragment = /* glsl */ `
 
 export type World = ReturnType<typeof buildWorld>;
 
-export function buildWorld({ anisotropy, detail }: { anisotropy: number; detail: number }) {
+export function buildWorld({
+  anisotropy,
+  detail,
+  gantry: layout,
+  font,
+}: {
+  anisotropy: number;
+  detail: number;
+  gantry: GantryLayout;
+  font: string;
+}) {
   const scene = new THREE.Scene();
   const rand = rng(11);
   const wind = { value: 0 };
@@ -200,7 +233,6 @@ export function buildWorld({ anisotropy, detail }: { anisotropy: number; detail:
     lushGrass: matte({ map: texture("/models/grass-lush.webp"), alphaTest: 0.5, alphaToCoverage: true }),
     fineGrass: matte({ map: texture("/models/grass-fine.webp"), alphaTest: 0.5, alphaToCoverage: true }),
     gantry: new THREE.MeshStandardMaterial({ metalness: 0.75, roughness: 0.42 }),
-    sign: matte({ roughness: 0.6 }),
     hillFar: matte({ flatShading: true }),
     hillNear: matte({ flatShading: true }),
   };
@@ -250,8 +282,8 @@ export function buildWorld({ anisotropy, detail }: { anisotropy: number; detail:
   grass(mats.lushGrass, 2.6, [0.25, 0.45]);
   grass(mats.fineGrass, 0.7, [0.4, 0.75]);
 
-  // Gantry: two posts carrying a box truss, with the sign panels bolted to
-  // its front. Each backing plate's front face is the sign's blue.
+  // Gantry: two posts carrying a box truss, with the sign panels hung from
+  // its front.
   const gantry = new THREE.Group();
   gantry.position.z = GANTRY_Z;
   for (const x of GANTRY_POSTS) {
@@ -263,10 +295,10 @@ export function buildWorld({ anisotropy, detail }: { anisotropy: number; detail:
     gantry.add(foot);
   }
   // The truss runs past whichever is wider, the posts or the signs.
-  const trussEnds = [Math.min(GANTRY_POSTS[0], SIGN_PANELS[0][0]) - 0.15, Math.max(GANTRY_POSTS[1], SIGN_PANELS[1][1]) + 0.15];
+  const trussEnds = [Math.min(GANTRY_POSTS[0], layout.left) - 0.15, Math.max(GANTRY_POSTS[1], layout.right) + 0.15];
   const span = trussEnds[1] - trussEnds[0];
   const middle = (trussEnds[0] + trussEnds[1]) / 2;
-  const chordY = [GANTRY_TOP - 0.17, GANTRY_TOP - 0.02];
+  const chordY = CHORD_Y;
   for (const y of chordY) {
     for (const z of [-0.08, 0.08]) {
       const chord = new THREE.Mesh(new THREE.BoxGeometry(span, 0.04, 0.04), mats.gantry);
@@ -286,29 +318,17 @@ export function buildWorld({ anisotropy, detail }: { anisotropy: number; detail:
       gantry.add(diagonal);
     }
   }
-  for (const [left, right] of SIGN_PANELS) {
-    // Inset from the CSS panel on every side, so its square corners and
-    // edges stay hidden behind the panel's rounded border.
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(right - left - 0.06, SIGN.height - 0.06, 0.05), [
-      mats.gantry,
-      mats.gantry,
-      mats.gantry,
-      mats.gantry,
-      mats.sign,
-      mats.gantry,
-    ]);
-    panel.position.set((left + right) / 2, SIGN.y, SIGN.z - GANTRY_Z - 0.026);
-    gantry.add(panel);
-    for (const x of [left + (right - left) * 0.2, right - (right - left) * 0.2]) {
-      const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.2, 0.12), mats.gantry);
-      bracket.position.set(x, GANTRY_TOP - 0.1, 0.06);
-      gantry.add(bracket);
-    }
-  }
   gantry.traverse((object) => {
     object.castShadow = true;
     object.receiveShadow = true;
   });
+  const signs = createGantrySign(layout.panels, {
+    font,
+    z: SIGN_FACE - 0.001,
+    metal: mats.gantry,
+    anisotropy,
+  });
+  gantry.add(signs.group);
   scene.add(gantry);
 
   // Keep trees back from the road and side road, and out of the line between
@@ -458,7 +478,7 @@ export function buildWorld({ anisotropy, detail }: { anisotropy: number; detail:
     for (const material of [mats.ground, mats.lushGrass, mats.fineGrass]) material.color.set(p.meadow);
     road.setStuds(p.studs);
     mats.gantry.color.set(p.gantry);
-    mats.sign.color.set(p.sign);
+    signs.setColors(p.sign, p.signGlow);
     mats.hillFar.color.set(p.hillFar);
     mats.hillNear.color.set(p.hillNear);
     cloudMaterial.color.set(p.cloud);
@@ -481,7 +501,7 @@ export function buildWorld({ anisotropy, detail }: { anisotropy: number; detail:
   }
 
   // Everything loaded asynchronously, settled (loaded or failed).
-  const ready = Promise.allSettled([car.ready, forest.ready, texturesReady]);
+  const ready = Promise.allSettled([car.ready, forest.ready, texturesReady, signs.ready]);
 
-  return { scene, skyScene, withDimSun, ready, road, forest, sky, sun, sunDirection, wind, clouds, dust: dustMaterial, car, apply };
+  return { scene, skyScene, withDimSun, ready, road, forest, sky, sun, sunDirection, wind, clouds, dust: dustMaterial, car, sign: signs, apply };
 }

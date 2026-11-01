@@ -1,16 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { Atkinson_Hyperlegible_Next } from "next/font/google";
+import localFont from "next/font/local";
 import { useRouter } from "next/navigation";
 import { useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { site } from "@/lib/site";
 import { createRoadEngine, type RoadEngine } from "./road/engine";
+import { LAYBY_BLUE, LEGEND_FONT_SIZE, SW } from "./road/sign";
+import { layoutGantry } from "./road/world";
 
-// UK road signs are set in Transport, which isn't on Google Fonts; this is
-// the closest stand-in.
-const signFont = Atkinson_Hyperlegible_Next({ subsets: ["latin"], weight: ["500", "700"] });
-
+// Transport Medium, the alphabet for white legends on UK direction signs
+// (Crown Copyright, Open Government Licence; see fonts/).
+const signFont = localFont({ src: "./road/fonts/transport-medium.ttf" });
 
 // The establishing shot plays once per session.
 const INTRO_KEY = "road-intro-seen";
@@ -24,31 +25,24 @@ const destinations = site.nav
     lateral: all.length === 1 ? 0 : -1 + (2 * i) / (all.length - 1),
   }));
 
-// Styled as a UK motorway gantry: the leftmost destination is signed off to
-// the lay-by, and the rest sit over the lanes they keep to.
-const exits = destinations.filter((item) => item.lateral < 0);
-const lanes = destinations.filter((item) => item.lateral >= 0);
-
-// A UK sign arrow: a straight shaft with a broad triangular head.
-function Arrow({ rotate, className = "" }: { rotate: number; className?: string }) {
-  return (
-    <svg aria-hidden viewBox="0 0 24 24" className={`shrink-0 ${className}`} style={{ rotate: `${rotate}deg` }}>
-      <path d="M12 1.5 21.5 11.5H15.2V22.5H8.8V11.5H2.5Z" fill="currentColor" />
-    </svg>
-  );
-}
-
-// Before the engine starts, or without WebGL, the sign sits centered over a
-// plain sky. The engine then places it in 3D on the gantry; sign sizes are
-// in em so it can set one font size (20px, 400px to a world unit). The two
-// panels' widths match SIGN_PANELS in road/world.ts, which puts each down
-// arrow over the centre of its lane.
+// UK direction signs on the gantry, one per destination (see road/sign.ts
+// and layoutGantry). Before the engine starts, or without WebGL, the signs
+// sit centered over a plain sky, drawn as SVG from the same art the scene
+// paints. The engine then places them in 3D, where they turn invisible over
+// the modelled signs and stay on as the links. Sizes are in em, one stroke
+// width, so the engine can set a single font size.
+const gantry = layoutGantry(destinations);
+const signWidth = (gantry.right - gantry.left) / SW + 0.8;
+const signHeight = (gantry.top - gantry.bottom) / SW + 0.8;
 const fallbackSign = {
   left: "50%",
   top: "42%",
   transform: "translate(-50%, -50%)",
-  fontSize: "clamp(3px, 0.95vw, 12px)",
+  fontSize: `clamp(2px, ${83 / signWidth}vw, ${1050 / signWidth}px)`,
+  width: `${signWidth}em`,
+  height: `${signHeight}em`,
 };
+const fills = { white: "#ffffff", green: "var(--sign)", blue: LAYBY_BLUE };
 
 export default function RoadScene() {
   const router = useRouter();
@@ -84,6 +78,7 @@ export default function RoadScene() {
         dark: scheme.matches,
         reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
         intro,
+        sign: { font: signFont.style.fontFamily, gantry },
         onIntroEnd: () => {
           try {
             sessionStorage.setItem(INTRO_KEY, "1");
@@ -124,8 +119,6 @@ export default function RoadScene() {
     onBlur: () => hint(null),
     "data-active": destination?.href === item.href || undefined,
   });
-  const linkClass =
-    "flex leading-none transition-colors hover:bg-white/10 focus-visible:outline-[0.1em] focus-visible:outline-offset-[-0.2em] focus-visible:outline-[#ffd200] data-active:bg-white/15";
 
   return (
     <div
@@ -139,41 +132,34 @@ export default function RoadScene() {
           {/* The transparent padding keeps the panels' edges inside the
               element: browsers don't antialias the outer edge of a
               3D-transformed element, which would leave them jagged. */}
-          <div ref={signRef} className="pointer-events-auto absolute h-[15.2em] w-[87.4em] p-[0.4em]" style={fallbackSign}>
-            <nav aria-label="Destinations" className={`${signFont.className} flex h-full w-full gap-[1.6em] font-medium text-white`}>
-              <div className="road-sign relative flex w-[23em] shrink-0 rounded-[0.5em] border-[0.22em] border-white bg-(--sign)">
-                {exits.map((item) => (
+          <div ref={signRef} className="pointer-events-auto absolute p-[0.4em]" style={fallbackSign}>
+            <nav aria-label="Destinations" className={`${signFont.className} relative h-full w-full`}>
+              {gantry.panels.map(({ item, art, left, top }) => (
                   <Link
                     key={item.href}
                     href={item.href}
                     {...linkProps(item)}
-                    className={`${linkClass} flex-1 items-start gap-[0.3em] px-[0.45em] pt-[0.45em] text-[1.8em]`}
+                    style={{
+                      left: `${(left - gantry.left) / SW}em`,
+                      top: `${(gantry.top - top) / SW}em`,
+                      width: `${art.width}em`,
+                      height: `${art.height}em`,
+                    }}
+                    className="road-sign absolute rounded-[3em] after:absolute after:inset-[1.5em] after:rounded-[1.5em] after:transition-colors hover:after:bg-white/10 focus-visible:outline-[0.6em] focus-visible:outline-offset-[-2.2em] focus-visible:outline-[#ffd200] data-active:after:bg-white/15"
                   >
-                    <Arrow rotate={-45} className="mt-[0.05em] size-[1.3em]" />
-                    {item.label}
+                    <svg aria-hidden viewBox={`0 0 ${art.width} ${art.height}`} className="absolute inset-0 h-full w-full">
+                      {art.shapes.map(({ d, fill }) => (
+                        <path key={d} d={d} fill={fills[fill]} />
+                      ))}
+                      {art.texts.map(({ text, x, y, anchor, fill }) => (
+                        <text key={text} x={x} y={y} textAnchor={anchor} fontSize={LEGEND_FONT_SIZE} fill={fills[fill]}>
+                          {text}
+                        </text>
+                      ))}
+                    </svg>
+                    <span className="sr-only">{item.label}</span>
                   </Link>
-                ))}
-                {/* The lay-by symbol: a white square with a blue P. */}
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute bottom-[0.7em] left-[0.9em] flex size-[1.45em] items-center justify-center rounded-[0.1em] bg-white text-[1.6em] leading-none font-bold text-(--sign)"
-                >
-                  P
-                </span>
-              </div>
-              <div className="road-sign flex flex-1 divide-x-[0.15em] divide-white rounded-[0.5em] border-[0.22em] border-white bg-(--sign)">
-                {lanes.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    {...linkProps(item)}
-                    className={`${linkClass} flex-1 flex-col items-center justify-center gap-[0.3em] text-[1.8em]`}
-                  >
-                    {item.label}
-                    <Arrow rotate={180} className="size-[1.1em]" />
-                  </Link>
-                ))}
-              </div>
+              ))}
             </nav>
           </div>
         </div>
