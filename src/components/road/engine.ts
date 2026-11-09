@@ -70,7 +70,6 @@ export type RoadElements = {
   camera: HTMLElement;
   sign: HTMLElement;
   fade: HTMLElement;
-  bars: HTMLElement;
 };
 
 export type RoadOptions = {
@@ -208,7 +207,6 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
 
   const reduced = options.reducedMotion;
   let intro = options.intro && !reduced ? { start: -1 } : null;
-  if (intro) el.bars.setAttribute("data-on", "");
   let drive: { start: number; lateral: number; onArrive: () => void; arrived: boolean; distance: number } | null = null;
   let hint: number | null = null;
   let glance = 0;
@@ -230,7 +228,6 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
 
   function endIntro() {
     intro = null;
-    el.bars.removeAttribute("data-on");
     options.onIntroEnd();
   }
 
@@ -265,8 +262,8 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
     let fade = 0;
     let signOpacity = 1;
 
-    // Establishing shot: a crane down from high behind the car, letterboxed,
-    // with the sign's links only taking the pointer once it has settled.
+    // Establishing shot: a crane down from high behind the car, with the
+    // sign's links only taking the pointer once it has settled.
     if (intro) {
       if (intro.start < 0) intro.start = now;
       const t = clamp01((now - intro.start) / INTRO_MS);
@@ -276,7 +273,6 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
       look.lerpVectors(INTRO_LOOK, look, e);
       vignette += (1 - e) * 0.4;
       signOpacity = clamp01((t - 0.82) / 0.18);
-      if (t > 0.78) el.bars.removeAttribute("data-on");
       if (t >= 1) endIntro();
     }
 
@@ -391,7 +387,6 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
       if (drive) return false;
       if (intro) endIntro();
       drive = { start: -1, lateral, onArrive, arrived: false, distance: 0 };
-      el.bars.setAttribute("data-on", "");
       return true;
     },
     hint(lateral) {
@@ -417,7 +412,6 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
       el.sign.removeAttribute("data-modelled");
       el.camera.style.cssText = cameraStyle;
       el.fade.style.opacity = "";
-      el.bars.removeAttribute("data-on");
     },
   };
 }

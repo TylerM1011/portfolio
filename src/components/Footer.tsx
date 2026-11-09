@@ -4,7 +4,8 @@ export default async function Footer() {
   "use cache";
 
   return (
-    <footer className="border-t border-foreground/10">
+    // Positioned so it paints over the home page's road scene.
+    <footer className="relative border-t border-foreground/10">
       <div className="mx-auto flex max-w-4xl flex-wrap justify-between gap-x-6 gap-y-2 px-6 py-6 text-sm text-foreground/60">
         <span>
           © {new Date().getFullYear()} {site.name}

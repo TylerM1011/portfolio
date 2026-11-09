@@ -59,8 +59,9 @@ export type GantryLayout = ReturnType<typeof layoutGantry<SignItem>>;
 
 export const CAR_Z = -1.9;
 
-// Seeded so the meadow and treeline are the same on every visit.
-function rng(seed: number) {
+// Seeded so the meadow and treeline are the same on every visit. The sky,
+// dust and texture helpers below are shared with the yard scene (../yard).
+export function rng(seed: number) {
   return () => {
     seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
@@ -69,7 +70,7 @@ function rng(seed: number) {
   };
 }
 
-function canvasTexture(width: number, height: number, draw: (ctx: CanvasRenderingContext2D) => void) {
+export function canvasTexture(width: number, height: number, draw: (ctx: CanvasRenderingContext2D) => void) {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -79,7 +80,7 @@ function canvasTexture(width: number, height: number, draw: (ctx: CanvasRenderin
   return texture;
 }
 
-function radialTexture(stops: [number, string][]) {
+export function radialTexture(stops: [number, string][]) {
   return canvasTexture(128, 128, (ctx) => {
     const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
     for (const [offset, color] of stops) gradient.addColorStop(offset, color);
@@ -88,7 +89,7 @@ function radialTexture(stops: [number, string][]) {
   });
 }
 
-const matte = (params: THREE.MeshStandardMaterialParameters = {}) =>
+export const matte = (params: THREE.MeshStandardMaterialParameters = {}) =>
   new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0, ...params });
 
 // Two crossed grass cards. Each face is wound both ways with every normal
@@ -133,7 +134,7 @@ function addWind(material: THREE.MeshStandardMaterial, time: { value: number }) 
   material.customProgramCacheKey = () => "road-wind";
 }
 
-const skyVertex = /* glsl */ `
+export const skyVertex = /* glsl */ `
   varying vec3 vDirection;
   void main() {
     vDirection = position;
@@ -141,7 +142,7 @@ const skyVertex = /* glsl */ `
   }
 `;
 
-const skyFragment = /* glsl */ `
+export const skyFragment = /* glsl */ `
   uniform vec3 uTop;
   uniform vec3 uHorizon;
   uniform vec3 uSun;
@@ -161,7 +162,7 @@ const skyFragment = /* glsl */ `
   }
 `;
 
-const dustVertex = /* glsl */ `
+export const dustVertex = /* glsl */ `
   attribute float aSeed;
   uniform float uTime;
   uniform float uScale;
@@ -180,7 +181,7 @@ const dustVertex = /* glsl */ `
   }
 `;
 
-const dustFragment = /* glsl */ `
+export const dustFragment = /* glsl */ `
   uniform vec3 uColor;
   varying float vAlpha;
   void main() {

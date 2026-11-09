@@ -29,8 +29,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       {/* Each section brings its own <main>: the home page is the full-bleed
-          road scene, and the other pages add the site header above theirs. */}
-      <body className="flex min-h-full flex-col">
+          road scene, and the other pages add the site header above theirs.
+          Both pages' scenes run on behind the footer: <body> is the road
+          scene's containing block, and the projects scene is fixed. */}
+      <body className="relative flex min-h-full flex-col">
         {children}
         <Footer />
       </body>

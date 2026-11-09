@@ -53,7 +53,6 @@ export default function RoadScene() {
   const cameraRef = useRef<HTMLDivElement>(null);
   const signRef = useRef<HTMLDivElement>(null);
   const fadeRef = useRef<HTMLDivElement>(null);
-  const barsRef = useRef<HTMLDivElement>(null);
 
   // Next.js keeps this page alive (hidden) after navigating away, which runs
   // this cleanup; the engine is rebuilt at rest when the visitor returns.
@@ -63,8 +62,7 @@ export default function RoadScene() {
     const camera = cameraRef.current;
     const sign = signRef.current;
     const fade = fadeRef.current;
-    const bars = barsRef.current;
-    if (!container || !stage || !camera || !sign || !fade || !bars) return;
+    if (!container || !stage || !camera || !sign || !fade) return;
 
     const scheme = window.matchMedia("(prefers-color-scheme: dark)");
     let intro = false;
@@ -73,7 +71,7 @@ export default function RoadScene() {
     } catch {}
 
     const engine = createRoadEngine(
-      { container, stage, camera, sign, fade, bars },
+      { container, stage, camera, sign, fade },
       {
         dark: scheme.matches,
         reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -123,7 +121,7 @@ export default function RoadScene() {
   return (
     <div
       ref={containerRef}
-      className="road-scene relative isolate min-h-[28rem] flex-1 overflow-hidden bg-linear-to-b from-[#4f8fcf] to-[#f2dfbf] dark:from-[#1c1f4d] dark:to-[#f08a5d]"
+      className="road-scene absolute inset-0 isolate overflow-hidden bg-linear-to-b from-[#4f8fcf] to-[#f2dfbf] dark:from-[#1c1f4d] dark:to-[#f08a5d]"
     >
       <div ref={stageRef} aria-hidden className="absolute inset-0" />
 
@@ -165,11 +163,9 @@ export default function RoadScene() {
         </div>
       </div>
 
-      {/* Letterbox bars slide in for the establishing shot and the drive. */}
-      <div ref={barsRef} aria-hidden className="group pointer-events-none absolute inset-0">
-        <div className="absolute inset-x-0 top-0 h-[11%] origin-top scale-y-0 bg-black transition-transform duration-900 ease-[cubic-bezier(0.7,0,0.2,1)] group-data-on:scale-y-100" />
-        <div className="absolute inset-x-0 bottom-0 h-[11%] origin-bottom scale-y-0 bg-black transition-transform duration-900 ease-[cubic-bezier(0.7,0,0.2,1)] group-data-on:scale-y-100" />
-      </div>
+      {/* The scene runs on behind the site footer, as on the projects page;
+          a scrim keeps the footer legible over the road. */}
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-linear-to-t from-background/75 to-transparent" />
 
       <div ref={fadeRef} className="pointer-events-none absolute inset-0 bg-background opacity-0" />
     </div>

@@ -25,6 +25,366 @@ body {
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
+/* Projects page: blueprints scattered over a construction site. The site is
+   a 3D scene (src/components/YardScene.tsx); each sheet is
+   src/components/Blueprint.tsx. */
+
+.blueprints {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2.75rem 2.5rem;
+  padding: 1rem 0 3rem;
+}
+
+.blueprint-wrap {
+  /* How each sheet lies: turned a little and nudged off the grid. */
+  --turn: -2.5deg;
+  --nudge-x: 0rem;
+  --nudge-y: 0rem;
+  position: relative;
+  width: 100%;
+  max-width: 26rem;
+}
+
+.blueprint-wrap:nth-child(4n + 2) {
+  --turn: 2deg;
+}
+
+.blueprint-wrap:nth-child(4n + 3) {
+  --turn: 1.2deg;
+}
+
+.blueprint-wrap:nth-child(4n + 4) {
+  --turn: -1.6deg;
+}
+
+@media (min-width: 640px) {
+  .blueprint-wrap {
+    width: calc(50% - 1.25rem);
+    --nudge-x: -0.75rem;
+  }
+
+  .blueprint-wrap:nth-child(4n + 2) {
+    --turn: 3deg;
+    --nudge-x: 0.5rem;
+    --nudge-y: 2.75rem;
+  }
+
+  .blueprint-wrap:nth-child(4n + 3) {
+    --turn: 1.8deg;
+    --nudge-x: 1.75rem;
+    --nudge-y: -1.25rem;
+  }
+
+  .blueprint-wrap:nth-child(4n + 4) {
+    --turn: -2.4deg;
+    --nudge-x: -0.5rem;
+    --nudge-y: 1.5rem;
+  }
+}
+
+/* The sheets lie flat on the site, so their shadows are short and soft. */
+.blueprint-wrap {
+  filter: drop-shadow(0 0.45rem 0.55rem rgba(20, 14, 6, 0.38)) drop-shadow(0 0.1rem 0.15rem rgba(20, 14, 6, 0.25));
+}
+
+/* Each sheet is the blue print itself, pinned at its top corners. No
+   backing sheet: the paper is .blueprint-sheet. */
+.blueprint {
+  --ink: #eef5ff;
+  --line: rgba(238, 245, 255, 0.75);
+  --pin: #e0352b;
+  position: relative;
+  display: block;
+  color: var(--ink);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  text-transform: uppercase;
+  transform: translate(var(--nudge-x), var(--nudge-y)) rotate(var(--turn));
+  transition: transform 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.blueprint-wrap:nth-child(3n + 2) .blueprint {
+  --pin: #f2b705;
+}
+
+.blueprint-wrap:nth-child(3n + 3) .blueprint {
+  --pin: #2f9e5b;
+}
+
+/* Push pins: a glossy plastic head throwing a small shadow down the sheet. */
+.blueprint::before,
+.blueprint::after {
+  position: absolute;
+  z-index: 2;
+  top: 0.45rem;
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.85) 0 12%, transparent 30%),
+    radial-gradient(circle at 50% 50%, var(--pin) 0 55%, color-mix(in srgb, var(--pin) 60%, black) 100%);
+  box-shadow:
+    0.18rem 0.28rem 0.25rem rgba(4, 14, 36, 0.45),
+    inset -0.08rem -0.1rem 0.15rem rgba(0, 0, 0, 0.3);
+  content: "";
+}
+
+.blueprint::before {
+  left: 0.45rem;
+}
+
+.blueprint::after {
+  right: 0.45rem;
+}
+
+.blueprint-wrap:hover,
+.blueprint-wrap:has(.blueprint:focus-visible) {
+  z-index: 1;
+}
+
+/* Pinned down, a sheet only lifts a little at the pointer. */
+.blueprint:hover,
+.blueprint:focus-visible {
+  transform: translate(var(--nudge-x), calc(var(--nudge-y) - 0.25rem)) rotate(var(--turn)) scale(1.015);
+}
+
+.blueprint:focus-visible {
+  outline: 3px solid #ffd200;
+  outline-offset: 4px;
+}
+
+/* As the page loads the sheets fall onto the site one after another: each drifts
+   down from above the viewer, swaying like paper, its shadow drawing in as
+   it nears the ground, then the pins are pushed in. --i is the sheet's
+   place in the list; --sway alternates which way it drifts. */
+.blueprint-wrap {
+  --i: 0;
+  --sway: 1;
+  --fall: 1100ms;
+  --fall-delay: calc(250ms + var(--i) * 220ms);
+  animation: blueprint-fall var(--fall) var(--fall-delay) both;
+}
+
+.blueprint-wrap:nth-child(even) {
+  --sway: -1;
+}
+
+.blueprint::before,
+.blueprint::after {
+  animation: blueprint-pin 320ms calc(var(--fall-delay) + var(--fall) * 0.78) both;
+}
+
+.blueprint::after {
+  animation-delay: calc(var(--fall-delay) + var(--fall) * 0.78 + 110ms);
+}
+
+@keyframes blueprint-fall {
+  0% {
+    opacity: 0;
+    transform: translate(calc(var(--sway) * -3rem), -6rem) rotate(calc(var(--sway) * -10deg)) scale(1.5);
+    filter: drop-shadow(0 3.5rem 2.5rem rgba(20, 14, 6, 0.12)) drop-shadow(0 1.2rem 1rem rgba(20, 14, 6, 0));
+    animation-timing-function: cubic-bezier(0.3, 0, 0.6, 1);
+  }
+  12% {
+    opacity: 1;
+  }
+  42% {
+    transform: translate(calc(var(--sway) * 2rem), -2.5rem) rotate(calc(var(--sway) * 6deg)) scale(1.24);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.8, 0.6);
+  }
+  74% {
+    transform: translate(calc(var(--sway) * -0.3rem), 0) rotate(calc(var(--sway) * -1deg)) scale(1);
+    filter: drop-shadow(0 0.45rem 0.55rem rgba(20, 14, 6, 0.38)) drop-shadow(0 0.1rem 0.15rem rgba(20, 14, 6, 0.25));
+    animation-timing-function: ease-out;
+  }
+  /* Air trapped underneath lifts the sheet a touch as it lands. */
+  86% {
+    transform: translate(calc(var(--sway) * 0.1rem), -0.15rem) rotate(calc(var(--sway) * 0.4deg)) scale(1.008);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    filter: drop-shadow(0 0.45rem 0.55rem rgba(20, 14, 6, 0.38)) drop-shadow(0 0.1rem 0.15rem rgba(20, 14, 6, 0.25));
+  }
+}
+
+@keyframes blueprint-pin {
+  0% {
+    opacity: 0;
+    transform: translateY(-0.6rem) scale(1.8);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(0) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blueprint-wrap,
+  .blueprint::before,
+  .blueprint::after {
+    animation: none;
+  }
+}
+
+/* The print: brighter on the left, deepening to the right, on a grid. */
+.blueprint-sheet {
+  position: relative;
+  display: block;
+  padding: 0.6rem;
+  border-radius: 1px;
+  /* A faint lighter edge where the paper was trimmed. */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  background-color: #2d78d6;
+  background-image:
+    linear-gradient(rgba(238, 245, 255, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(238, 245, 255, 0.14) 1px, transparent 1px),
+    linear-gradient(rgba(238, 245, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(238, 245, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(100deg, #4aa3f4, #2f7fdc 45%, #1f5bb2 80%, #1b4f9e);
+  background-size:
+    2rem 2rem,
+    2rem 2rem,
+    0.5rem 0.5rem,
+    0.5rem 0.5rem,
+    100% 100%;
+}
+
+/* Zone ticks along all four margins, between the print's edge and frame. */
+.blueprint-sheet::before {
+  position: absolute;
+  inset: 0.15rem;
+  background:
+    repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 12.5%) top / 100% 0.3rem no-repeat,
+    repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 12.5%) bottom / 100% 0.3rem no-repeat,
+    repeating-linear-gradient(var(--line) 0 1px, transparent 1px 16.66%) left / 0.3rem 100% no-repeat,
+    repeating-linear-gradient(var(--line) 0 1px, transparent 1px 16.66%) right / 0.3rem 100% no-repeat;
+  content: "";
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* A double ruled border. */
+.blueprint-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  outline: 1px solid rgba(238, 245, 255, 0.45);
+  outline-offset: 2px;
+}
+
+.blueprint-drawing {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 0.5rem 0.5rem 0;
+  opacity: 0.88;
+}
+
+.blueprint-drawing text {
+  fill: currentColor;
+  stroke: none;
+  font-size: 7px;
+  letter-spacing: 0.08em;
+}
+
+.blueprint-footer {
+  display: flex;
+  align-items: flex-end;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+}
+
+.blueprint-notes {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.4rem 0.6rem;
+  line-height: 1.4;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+/* Title block, tucked into the bottom right corner of the frame. */
+.blueprint-title {
+  display: grid;
+  width: 62%;
+  grid-template-columns: 1fr 1fr auto;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+
+.blueprint-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.1rem;
+  padding: 0.25rem 0.45rem;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.blueprint-end {
+  border-right: 0;
+}
+
+.blueprint-last {
+  border-bottom: 0;
+}
+
+.blueprint-name {
+  grid-column: span 2;
+}
+
+.blueprint-revision {
+  width: 0.9rem;
+  height: 0.8rem;
+}
+
+.blueprint-label {
+  font-size: 0.5rem;
+  letter-spacing: 0.18em;
+  opacity: 0.7;
+}
+
+.blueprint-name h2 {
+  overflow: hidden;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Rubber stamp across the drawing. */
+.blueprint-stamp {
+  position: absolute;
+  /* Across the lower half of the drawing, clear of any lettering up top. */
+  top: 54%;
+  left: 42%;
+  padding: 0.3rem 0.7rem;
+  border: 3px double #ff7a6b;
+  border-radius: 4px;
+  color: #ff7a6b;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  white-space: nowrap;
+  mix-blend-mode: screen;
+  opacity: 0.9;
+  transform: translate(-50%, -50%) rotate(-14deg);
+}
+
 /* Landing page road scene. The rest of its palette lives in
    src/components/road/palette.ts. */
 
