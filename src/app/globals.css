@@ -480,14 +480,14 @@ body:has(.yard-cover:not([data-state="lifted"])) .blueprint::after {
   top: 54%;
   left: 42%;
   padding: 0.3rem 0.7rem;
-  border: 3px double #ff7a6b;
+  border: 3px double var(--stamp, #ff7a6b);
   border-radius: 4px;
-  color: #ff7a6b;
+  color: var(--stamp, #ff7a6b);
   font-size: 0.85rem;
   font-weight: 800;
   letter-spacing: 0.16em;
   white-space: nowrap;
-  mix-blend-mode: screen;
+  mix-blend-mode: var(--stamp-blend, screen);
   opacity: 0.9;
   transform: translate(-50%, -50%) rotate(-14deg);
 }

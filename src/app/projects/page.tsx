@@ -18,6 +18,7 @@ const projects: Project[] = [
   {
     name: "Portfolio",
     description: "This website, built with Next.js and three.js.",
+    status: "Under construction",
     href: "https://github.com/TylerM1011/Portfolio",
     drawing: "website",
   },
@@ -25,6 +26,7 @@ const projects: Project[] = [
     name: "fuck roll 20",
     description: "A short description of the project.",
     status: "Collaborated",
+    stamp: "green",
     href: "https://fuck-roll-20.winkwonk.workers.dev/",
     drawing: "dice",
   },

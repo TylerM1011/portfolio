@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { site } from "@/lib/site";
 
 export type Project = {
@@ -6,8 +7,18 @@ export type Project = {
   href: string;
   // Shown as a rubber stamp across the sheet, e.g. "Under construction".
   status?: string;
+  // The stamp's ink; red unless given.
+  stamp?: keyof typeof stampInks;
   // A drawing made for this project; otherwise it takes a stock one.
   drawing?: keyof typeof featured;
+};
+
+// Stamp inks. Red is screened onto the blue, which lifts it to a bright
+// coral; screening keeps the paper's blue, so green would come out cyan and
+// is laid on plain instead.
+const stampInks = {
+  red: { "--stamp": "#ff7a6b", "--stamp-blend": "screen" },
+  green: { "--stamp": "#3fd46b", "--stamp-blend": "normal" },
 };
 
 // Line drawings for the sheets, in white ink on a 320 × 190 drawing area.
@@ -234,7 +245,11 @@ export default function Blueprint({ project, index, total }: { project: Project;
           </span>
         </span>
       </span>
-      {project.status && <span className="blueprint-stamp">{project.status}</span>}
+      {project.status && (
+        <span className="blueprint-stamp" style={stampInks[project.stamp ?? "red"] as CSSProperties}>
+          {project.status}
+        </span>
+      )}
     </a>
   );
 }
