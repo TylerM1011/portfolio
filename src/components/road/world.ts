@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { loadImage, TEXTURE_URLS } from "@/lib/assets";
 import { createCar } from "./car";
 import { createForest } from "./forest";
 import { createRoad, ROAD } from "./road";
@@ -68,6 +69,22 @@ export function rng(seed: number) {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+// A texture whose image comes from the shared asset cache (see lib/assets.ts),
+// so every scene reuses the one download. `ready` settles once the image is
+// in place, or has failed to load.
+export function imageTexture(url: string, scene: string) {
+  const texture = new THREE.Texture();
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const ready = loadImage(url).then(
+    (image) => {
+      texture.image = image;
+      texture.needsUpdate = true;
+    },
+    (error) => console.error(`${scene}: could not load ${url}`, error),
+  );
+  return { texture, ready };
 }
 
 export function canvasTexture(width: number, height: number, draw: (ctx: CanvasRenderingContext2D) => void) {
@@ -210,15 +227,10 @@ export function buildWorld({
   const tint = new THREE.Color();
 
   // Ground and grass textures from "Pine Forest at Sunset" (see forest.ts).
-  const textures = new THREE.LoadingManager();
-  const texturesReady = new Promise<void>((resolve) => {
-    textures.onLoad = resolve;
-    textures.onError = (url) => console.error(`RoadScene: could not load ${url}`);
-  });
-  const textureLoader = new THREE.TextureLoader(textures);
+  const textureLoads: Promise<void>[] = [];
   const texture = (url: string, repeatX = 1, repeatY = 1) => {
-    const map = textureLoader.load(url);
-    map.colorSpace = THREE.SRGBColorSpace;
+    const { texture: map, ready } = imageTexture(url, "RoadScene");
+    textureLoads.push(ready);
     map.anisotropy = anisotropy;
     if (repeatX !== 1 || repeatY !== 1) {
       map.wrapS = map.wrapT = THREE.RepeatWrapping;
@@ -227,12 +239,12 @@ export function buildWorld({
     return map;
   };
   // One tile of meadow every 3 units.
-  const groundMap = texture("/models/meadow-ground.webp", 4000 / 3, 4000 / 3);
+  const groundMap = texture(TEXTURE_URLS.meadow, 4000 / 3, 4000 / 3);
 
   const mats = {
     ground: matte({ map: groundMap }),
-    lushGrass: matte({ map: texture("/models/grass-lush.webp"), alphaTest: 0.5, alphaToCoverage: true }),
-    fineGrass: matte({ map: texture("/models/grass-fine.webp"), alphaTest: 0.5, alphaToCoverage: true }),
+    lushGrass: matte({ map: texture(TEXTURE_URLS.lushGrass), alphaTest: 0.5, alphaToCoverage: true }),
+    fineGrass: matte({ map: texture(TEXTURE_URLS.fineGrass), alphaTest: 0.5, alphaToCoverage: true }),
     gantry: new THREE.MeshStandardMaterial({ metalness: 0.75, roughness: 0.42 }),
     hillFar: matte({ flatShading: true }),
     hillNear: matte({ flatShading: true }),
@@ -502,7 +514,7 @@ export function buildWorld({
   }
 
   // Everything loaded asynchronously, settled (loaded or failed).
-  const ready = Promise.allSettled([car.ready, forest.ready, texturesReady, signs.ready]);
+  const ready = Promise.allSettled([car.ready, forest.ready, ...textureLoads, signs.ready]);
 
   return { scene, skyScene, withDimSun, ready, road, forest, sky, sun, sunDirection, wind, clouds, dust: dustMaterial, car, sign: signs, apply };
 }

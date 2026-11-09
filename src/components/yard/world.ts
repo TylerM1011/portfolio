@@ -1,7 +1,9 @@
 import * as THREE from "three";
+import { TEXTURE_URLS } from "@/lib/assets";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { createForest } from "../road/forest";
-import { canvasTexture, dustFragment, dustVertex, matte, radialTexture, rng, skyFragment, skyVertex } from "../road/world";
+import { createGantrySign, directionArt, SW, type GantryPanel, type SignItem } from "../road/sign";
+import { canvasTexture, dustFragment, dustVertex, imageTexture, matte, radialTexture, rng, skyFragment, skyVertex } from "../road/world";
 import { day, dusk, type YardPalette } from "./palette";
 
 // World units match the road scene: 0.44 to the metre. x is lateral, y is
@@ -14,11 +16,58 @@ const M = 0.44;
 const GROUND_Y = -0.02;
 const DIRT_Y = 0;
 
-export const EYE = new THREE.Vector3(0, 2.5, 15);
-export const LOOK = new THREE.Vector3(0, 3.4, -20);
+export const EYE = new THREE.Vector3(0, 2.2, 15);
+export const LOOK = new THREE.Vector3(0, 1.2, -20);
 
 // The fenced yard.
 const YARD = { left: -30, right: 30, front: 7, back: -42, gate: 3.5 };
+
+// The signpost stands by the gate, off to the right and turned to face the
+// camera: out by the fence on wide screens, clear of the sheets, and drawn
+// in on narrow ones to stay in shot (see placeSignpost). Its panels are
+// drawn to the gantry's 250 mm x-height and scaled down to a site road's
+// 110 mm. It has seen better days: the post leans back and to the right and
+// two of the panels have worked loose on their clamps (radians, per panel
+// from the top; see also the wear in sign.ts).
+export const SIGNPOST = { maxX: 3.2, z: 7.3, scale: 0.45, clearance: 0.4 };
+const SIGNPOST_LEAN = { back: -0.025, side: -0.05 };
+const SIGNPOST_TILTS = [-0.02, 0, 0.035];
+// The grey-olive the sign green fades toward.
+const SIGN_FADE = new THREE.Color(0x8c9682);
+// Faces stand this far in front of the posts, clear of the rails behind.
+const SIGNPOST_FACE = 0.17;
+
+// Lays out the signpost: a stack of direction panels (see directionArt), one
+// per destination in order down the post, all the size of the largest. x and
+// y are in the signpost's own frame, before scaling, with the ground at
+// y = 0. The invisible CSS sign spans the stack, flush on the faces.
+export function layoutSignpost<T extends SignItem>(items: readonly T[]) {
+  const size = items
+    .map((item) => directionArt(item))
+    .reduce((max, art) => ({ width: Math.max(max.width, art.width), height: Math.max(max.height, art.height) }), { width: 0, height: 0 });
+  const w = size.width * SW;
+  const h = size.height * SW;
+  const gap = 2 * SW;
+  const bottom = SIGNPOST.clearance / SIGNPOST.scale;
+  const panels: GantryPanel<T>[] = items.map((item, i) => ({
+    item,
+    art: directionArt(item, size),
+    left: -w / 2,
+    right: w / 2,
+    top: bottom + (items.length - i) * h + (items.length - 1 - i) * gap,
+    tilt: SIGNPOST_TILTS[i % SIGNPOST_TILTS.length],
+  }));
+  return {
+    panels,
+    left: -w / 2,
+    right: w / 2,
+    top: panels[0].top,
+    bottom,
+    z: SIGNPOST_FACE,
+  };
+}
+
+export type SignpostLayout = ReturnType<typeof layoutSignpost<SignItem>>;
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -780,18 +829,22 @@ function createFloodlight(mats: Materials, x: number, z: number, target: THREE.V
 
 export type Yard = ReturnType<typeof buildYard>;
 
-export function buildYard({ anisotropy, detail }: { anisotropy: number; detail: number }) {
+export function buildYard({
+  anisotropy,
+  detail,
+  signpost: layout,
+  font,
+}: {
+  anisotropy: number;
+  detail: number;
+  signpost: SignpostLayout;
+  font: string;
+}) {
   const scene = new THREE.Scene();
   const rand = rng(23);
   const wind = { value: 0 };
 
-  const textures = new THREE.LoadingManager();
-  const texturesReady = new Promise<void>((resolve) => {
-    textures.onLoad = resolve;
-    textures.onError = (url) => console.error(`YardScene: could not load ${url}`);
-  });
-  const meadowMap = new THREE.TextureLoader(textures).load("/models/meadow-ground.webp");
-  meadowMap.colorSpace = THREE.SRGBColorSpace;
+  const { texture: meadowMap, ready: texturesReady } = imageTexture(TEXTURE_URLS.meadow, "YardScene");
   meadowMap.anisotropy = anisotropy;
   meadowMap.wrapS = meadowMap.wrapT = THREE.RepeatWrapping;
   meadowMap.repeat.set(4000 / 3, 4000 / 3);
@@ -824,6 +877,33 @@ export function buildYard({ anisotropy, detail }: { anisotropy: number; detail: 
     mesh.renderOrder = 1;
     scene.add(mesh);
   }
+
+  // The signpost: the direction panels, worn and weathered, on two posts
+  // whose galvanising has long since given way to rust. Its own seed, so the
+  // rest of the yard keeps its layout.
+  const rust = groundTexture(rng(41), { base: "#7d7468", light: "168,160,148", dark: "112,58,26" }, 3000);
+  rust.wrapS = rust.wrapT = THREE.RepeatWrapping;
+  rust.repeat.set(1, 6);
+  const rusty = new THREE.MeshStandardMaterial({ map: rust, roughness: 0.85, metalness: 0.35 });
+  const signpost = new THREE.Group();
+  signpost.rotation.order = "YXZ";
+  const signs = createGantrySign(layout.panels, { font, z: layout.z, metal: rusty, anisotropy, lamps: false, wear: 1 });
+  signpost.add(signs.group);
+  const postHeight = layout.top - 0.02;
+  for (const x of [layout.left * 0.6, layout.right * 0.6]) {
+    add(signpost, new THREE.CylinderGeometry(0.045, 0.045, postHeight, 12), rusty, x, postHeight / 2, 0);
+  }
+  signpost.scale.setScalar(SIGNPOST.scale);
+  scene.add(signpost);
+  // Stands the signpost x across (capped at SIGNPOST.maxX), facing the
+  // camera, leaning.
+  function placeSignpost(x: number) {
+    x = Math.min(x, SIGNPOST.maxX);
+    signpost.position.set(x, 0, SIGNPOST.z);
+    signpost.rotation.set(SIGNPOST_LEAN.back, Math.atan2(EYE.x - x, EYE.z - SIGNPOST.z), SIGNPOST_LEAN.side);
+    signpost.updateMatrixWorld(true);
+  }
+  placeSignpost(SIGNPOST.maxX);
 
   // Tower crane, behind and to the left, its jib swinging over the frame.
   const crane = createCrane(mats);
@@ -1100,6 +1180,8 @@ export function buildYard({ anisotropy, detail }: { anisotropy: number; detail: 
     for (const spot of spots) spot.intensity = p.floodlights;
     for (const wall of mats.cabinWalls) wall.emissiveIntensity = p.windows;
     crane.beaconMaterial.color.set(0xff2a1a).multiplyScalar(p.beacon);
+    // Sun-bleached sheeting that has lost most of its shine.
+    signs.setColors(new THREE.Color(p.sign).lerp(SIGN_FADE, 0.3).getHex(), p.signGlow * 0.4);
   }
 
   function withDimSun<T>(capture: () => T) {
@@ -1113,7 +1195,7 @@ export function buildYard({ anisotropy, detail }: { anisotropy: number; detail: 
     }
   }
 
-  const ready = Promise.allSettled([forest.ready, texturesReady]);
+  const ready = Promise.allSettled([forest.ready, texturesReady, signs.ready]);
 
   return {
     scene,
@@ -1127,5 +1209,8 @@ export function buildYard({ anisotropy, detail }: { anisotropy: number; detail: 
     wind,
     apply,
     update: crane.update,
+    sign: signs,
+    signpost,
+    placeSignpost,
   };
 }

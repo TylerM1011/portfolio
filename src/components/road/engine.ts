@@ -90,12 +90,12 @@ export type RoadEngine = {
 // The same matrices CSS3DRenderer writes, flipping y because CSS y points down.
 const epsilon = (n: number) => (Math.abs(n) < 1e-10 ? 0 : n);
 
-function cameraCSS({ elements: e }: THREE.Matrix4) {
+export function cameraCSS({ elements: e }: THREE.Matrix4) {
   const values = [e[0], -e[1], e[2], e[3], e[4], -e[5], e[6], e[7], e[8], -e[9], e[10], e[11], e[12], -e[13], e[14], e[15]];
   return `matrix3d(${values.map(epsilon).join(",")})`;
 }
 
-function objectCSS({ elements: e }: THREE.Matrix4) {
+export function objectCSS({ elements: e }: THREE.Matrix4) {
   const values = [e[0], e[1], e[2], e[3], -e[4], -e[5], -e[6], -e[7], e[8], e[9], e[10], e[11], e[12], e[13], e[14], e[15]];
   return `translate(-50%,-50%) matrix3d(${values.map(epsilon).join(",")})`;
 }

@@ -1,11 +1,12 @@
 import * as THREE from "three";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { loadBuffer, MODEL_URLS } from "@/lib/assets";
 import type { Palette } from "./palette";
 
 // "2024 Volkswagen Polo 170 TSI" by Ddiaz Design (CC BY-NC-SA 4.0), with the
 // cabin cut down to the seats and the mesh meshopt-compressed.
-const MODEL_URL = "/models/polo.glb";
+const MODEL_URL = MODEL_URLS.car;
 
 // Scaled so the roof sits at 0.7, like the illustrated car it replaces. The
 // camera's eye has to stay above the roof (see engine.ts).
@@ -196,7 +197,11 @@ export function createCar() {
   }
 
   const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-  const ready = loader.loadAsync(MODEL_URL).then(
+  // The bytes come from the shared asset cache (see lib/assets.ts); each
+  // scene parses its own copy, since it disposes of the meshes when it stops.
+  const ready = loadBuffer(MODEL_URL)
+    .then((buffer) => loader.parseAsync(buffer, "/models/"))
+    .then(
     (gltf) => {
       if (disposed) disposeTree(gltf.scene);
       else place(gltf.scene);

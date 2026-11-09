@@ -1,12 +1,13 @@
 import * as THREE from "three";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { loadBuffer, MODEL_URLS } from "@/lib/assets";
 import { disposeTree } from "./car";
 
 // Tree prototypes from "Pine Forest at Sunset" by Jagobo (CC BY 4.0): three
 // large pines ("hero-*") and five young ponderosas ("line-*"), each sitting
 // on the origin, with hidden branch geometry simplified.
-const MODEL_URL = "/models/forest.glb";
+const MODEL_URL = MODEL_URLS.forest;
 
 type Spot = { x: number; y: number; z: number; height: number; rotation: number };
 
@@ -100,7 +101,11 @@ export function createForest({
 
   const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
   const spots = place();
-  const ready = loader.loadAsync(MODEL_URL).then(
+  // The bytes come from the shared asset cache (see lib/assets.ts); each
+  // scene parses its own copy, since it disposes of the meshes when it stops.
+  const ready = loadBuffer(MODEL_URL)
+    .then((buffer) => loader.parseAsync(buffer, "/models/"))
+    .then(
     (gltf) => {
       const { shaded, unshaded, far, treeline } = spots;
       if (disposed) return disposeTree(gltf.scene);

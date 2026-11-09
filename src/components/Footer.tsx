@@ -1,15 +1,11 @@
-import { site } from "@/lib/site";
+import FooterReveal from "./FooterReveal";
 
 export default async function Footer() {
   "use cache";
 
   return (
-    // Positioned so it paints over the home page's road scene.
-    <footer className="relative border-t border-foreground/10">
-      <div className="mx-auto flex max-w-4xl flex-wrap justify-between gap-x-6 gap-y-2 px-6 py-6 text-sm text-foreground/60">
-        <span>
-          © {new Date().getFullYear()} {site.name}
-        </span>
+    <FooterReveal>
+      <div className="mx-auto flex max-w-4xl justify-end px-6 py-6 text-sm text-foreground/60">
         {/* Required by the 3D models' Creative Commons licenses and the sign
             font's Open Government Licence. */}
         <span className="flex flex-col gap-1 text-xs sm:items-end">
@@ -70,6 +66,6 @@ export default async function Footer() {
           </span>
         </span>
       </div>
-    </footer>
+    </FooterReveal>
   );
 }

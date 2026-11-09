@@ -202,6 +202,29 @@ export function panelArt(item: SignItem, minWidth = 0) {
   return item.lateral < 0 ? exitArt(item) : laneArt(item, minWidth);
 }
 
+// One panel of a ground-mounted stack-type sign (TSM 7, 4.2): the standard
+// arrow, then the legend. lateral below 0 points left, above 0 right, and 0
+// points down, back the way the car came. The arrow sits in a 16 sw slot so
+// legends line up down the stack; `size` (in sw) lets every panel match the
+// largest.
+export function directionArt(item: SignItem, size = { width: 0, height: 0 }): Art {
+  const arrow = turn(STANDARD_ARROW, item.lateral < 0 ? 0 : item.lateral > 0 ? 180 : -90);
+  const slot = 16;
+  const inner = Math.max(TILE, arrow.height) + 2 * MARGIN;
+  const height = Math.max(size.height, inner + 2 * BORDER);
+  const legendLeft = BORDER + MARGIN + slot + MARGIN;
+  const width = Math.max(size.width, legendLeft + legendWidth(item.label) + MARGIN + BORDER);
+  const { field, shapes } = board(width, height);
+  shapes.push({ d: polygon(arrow.points, BORDER + MARGIN + (slot - arrow.width) / 2, (height - arrow.height) / 2), fill: "white" });
+  return {
+    width,
+    height,
+    field,
+    shapes,
+    texts: [{ text: item.label, x: legendLeft, y: (height - TILE) / 2 + TILE_TO_BASELINE, anchor: "start", fill: "white" }],
+  };
+}
+
 // Texture pixels per sw.
 const PX = 40;
 
@@ -236,6 +259,120 @@ function weather(ctx: CanvasRenderingContext2D, width: number, height: number, s
   }
 }
 
+// Years of neglect, for signs left out on a building site: sheeting
+// bleached by the sun, mud thrown up from the ground, flakes chipped and
+// peeled back to the aluminium (mostly at the edges), rust weeping from the
+// fixings, scratches, and lichen along the top. `wear` scales it all, 0 to 1.
+function wearDown(ctx: CanvasRenderingContext2D, width: number, height: number, seed: number, wear: number) {
+  const rand = rng(seed * 31 + 5);
+  const dot = (x: number, y: number, r: number, fill: string) => {
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  };
+
+  ctx.fillStyle = `rgb(232 226 204 / ${0.28 * wear})`;
+  ctx.fillRect(0, 0, width, height);
+
+  // Broad stains of dirt where water has sat on the face.
+  for (let i = 0; i < (width / 6) * wear; i++) {
+    const x = rand() * width;
+    const y = rand() * height;
+    const r = 1.5 + rand() * 4;
+    const stain = ctx.createRadialGradient(x, y, 0, x, y, r);
+    stain.addColorStop(0, `rgb(66 56 38 / ${0.12 + rand() * 0.16})`);
+    stain.addColorStop(1, "rgb(66 56 38 / 0)");
+    ctx.fillStyle = stain;
+    ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+  }
+
+  const mud = ctx.createLinearGradient(0, height * 0.35, 0, height);
+  mud.addColorStop(0, "rgb(84 64 40 / 0)");
+  mud.addColorStop(1, `rgb(84 64 40 / ${0.55 * wear})`);
+  ctx.fillStyle = mud;
+  ctx.fillRect(0, 0, width, height);
+  for (let i = 0; i < width * 10 * wear; i++) {
+    dot(rand() * width, height - rand() ** 2 * height * 0.75, 0.08 + rand() * 0.35, `rgb(70 52 32 / ${0.15 + rand() * 0.3})`);
+  }
+
+  // Rust creeping in from the bottom edge.
+  for (let i = 0; i < (width / 3) * wear; i++) {
+    const x = rand() * width;
+    const r = 0.6 + rand() * 1.8;
+    const creep = ctx.createRadialGradient(x, height, 0, x, height, r * 1.6);
+    creep.addColorStop(0, `rgb(120 58 20 / ${0.45 + rand() * 0.3})`);
+    creep.addColorStop(1, "rgb(120 58 20 / 0)");
+    ctx.fillStyle = creep;
+    ctx.fillRect(x - r * 1.6, height - r * 1.6, r * 3.2, r * 1.6);
+  }
+
+  for (let i = 0; i < Math.round((width / 2.5) * wear); i++) {
+    let x = rand() * width;
+    let y = rand() * height;
+    if (rand() < 0.7) {
+      const side = Math.floor(rand() * 4);
+      if (side === 0) y = rand() * 1.5;
+      else if (side === 1) y = height - rand() * 1.5;
+      else if (side === 2) x = rand() * 1.5;
+      else x = width - rand() * 1.5;
+    }
+    const r = 0.5 + rand() ** 2 * 3.2;
+    const points = 7 + Math.floor(rand() * 5);
+    ctx.beginPath();
+    for (let k = 0; k < points; k++) {
+      const a = (k / points) * Math.PI * 2;
+      const reach = r * (0.45 + rand() * 0.75);
+      ctx.lineTo(x + Math.cos(a) * reach, y + Math.sin(a) * reach * 0.8);
+    }
+    ctx.closePath();
+    ctx.fillStyle = "#a9aca6";
+    ctx.fill();
+    ctx.strokeStyle = "rgb(60 58 52 / 0.45)";
+    ctx.lineWidth = 0.12;
+    ctx.stroke();
+  }
+
+  // The fixings sit where the rails cross the uprights behind (see
+  // createGantrySign).
+  for (const fx of [0.2, 0.8]) {
+    for (const fy of [0.25, 0.75]) {
+      const x = fx * width + (rand() - 0.5) * 0.6;
+      const y = fy * height;
+      const length = (5 + rand() * 9) * wear;
+      const streak = ctx.createLinearGradient(0, y, 0, y + length);
+      streak.addColorStop(0, `rgb(128 62 22 / ${0.85 * wear})`);
+      streak.addColorStop(0.4, `rgb(128 62 22 / ${0.45 * wear})`);
+      streak.addColorStop(1, "rgb(128 62 22 / 0)");
+      ctx.fillStyle = streak;
+      ctx.fillRect(x - 0.55, y, 1.1 + rand() * 0.6, length);
+      dot(x, y, 0.9, "rgb(140 72 30 / 0.7)");
+      dot(x, y, 0.4, "#5f574e");
+    }
+  }
+
+  ctx.lineCap = "round";
+  for (let i = 0; i < width * 0.6 * wear; i++) {
+    const x = rand() * width;
+    const y = rand() * height;
+    const a = rand() * Math.PI;
+    const length = 0.8 + rand() * 4;
+    ctx.strokeStyle = `rgb(235 235 225 / ${0.15 + rand() * 0.25})`;
+    ctx.lineWidth = 0.05 + rand() * 0.08;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(a) * length, y + Math.sin(a) * length);
+    ctx.stroke();
+  }
+
+  for (let i = 0; i < 6 * wear; i++) {
+    const x = rand() * width;
+    for (let k = 0; k < 4; k++) {
+      dot(x + (rand() - 0.5) * 1.6, rand() * 2.2, 0.2 + rand() * 0.6, `rgb(168 170 92 / ${0.2 + rand() * 0.2})`);
+    }
+  }
+}
+
 // A plate outline in world units, centred on the origin.
 function outline(width: number, height: number, radius: number) {
   const shape = new THREE.Shape();
@@ -252,30 +389,45 @@ function outline(width: number, height: number, radius: number) {
   return shape;
 }
 
-export type GantryPanel<T extends SignItem = SignItem> = { item: T; art: Art; left: number; right: number; top: number };
+export type GantryPanel<T extends SignItem = SignItem> = {
+  item: T;
+  art: Art;
+  left: number;
+  right: number;
+  top: number;
+  // Turned about its centre (radians, anticlockwise), as if worked loose.
+  tilt?: number;
+};
 
 // The gantry's sign panels: each an aluminium plate with rounded corners and
 // a chamfered edge that catches the light, its printed face, stiffening
 // rails and uprights behind (the uprights clamp onto the truss), and a lamp
 // on top. Faces sit at `z`; `metal` dresses everything but the faces.
+// `wear` (0 to 1) runs the panels down well past ordinary weathering.
 export function createGantrySign(
   panels: readonly GantryPanel[],
-  { font, z, metal, anisotropy }: {
+  { font, z, metal, anisotropy, lamps = true, wear = 0 }: {
     font: string;
     z: number;
     metal: THREE.Material;
     anisotropy: number;
+    // Gantry signs are lit from above; post-mounted ones go without.
+    lamps?: boolean;
+    wear?: number;
   },
 ) {
   const group = new THREE.Group();
   let green = "#00703c";
   let highlight: { lateral: number | null; active: boolean } = { lateral: null, active: false };
 
-  const drawn = panels.map(({ item, art, left, right, top }, i) => {
+  const drawn = panels.map(({ item, art, left, right, top, tilt = 0 }, i) => {
     const w = right - left;
     const h = art.height * SW;
-    const centre = (left + right) / 2;
-    const y = top - h / 2;
+    // Everything below is placed relative to the panel's centre.
+    const panel = new THREE.Group();
+    panel.position.set((left + right) / 2, top - h / 2, 0);
+    panel.rotation.z = tilt;
+    group.add(panel);
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(art.width * PX);
     canvas.height = Math.round(art.height * PX);
@@ -299,8 +451,8 @@ export function createGantrySign(
     const uv = faceGeometry.attributes.uv;
     for (let v = 0; v < uv.count; v++) uv.setXY(v, uv.getX(v) / w + 0.5, uv.getY(v) / h + 0.5);
     const face = new THREE.Mesh(faceGeometry, material);
-    face.position.set(centre, y, z);
-    group.add(face);
+    face.position.set(0, 0, z);
+    panel.add(face);
 
     // The bevel's front edge is the face's outline; it widens backwards from
     // there, so the chamfer shows as a rim around the face.
@@ -318,36 +470,37 @@ export function createGantrySign(
       }),
       metal,
     );
-    plate.position.set(centre, y, z - depth - bevel - 0.0005);
-    group.add(plate);
+    plate.position.set(0, 0, z - depth - bevel - 0.0005);
+    panel.add(plate);
 
     // Horizontal rails behind the plate, a quarter of the way in from its
     // top and bottom, and uprights behind them reaching back to the truss.
     const railZ = z - thickness - 0.015;
     for (const at of [0.25, -0.25]) {
       const rail = new THREE.Mesh(new THREE.BoxGeometry(w - 0.06, 0.03, 0.03), metal);
-      rail.position.set(centre, y + at * h, railZ);
-      group.add(rail);
+      rail.position.set(0, at * h, railZ);
+      panel.add(rail);
     }
-    for (const x of [left + w * 0.2, right - w * 0.2]) {
+    for (const x of [-w * 0.3, w * 0.3]) {
       const upright = new THREE.Mesh(new THREE.BoxGeometry(0.04, h / 2 + 0.03, 0.04), metal);
-      upright.position.set(x, y, railZ - 0.035);
-      group.add(upright);
+      upright.position.set(x, 0, railZ - 0.035);
+      panel.add(upright);
     }
 
-    // A lamp on a short stem above the panel, its arm reaching out to hang
-    // the housing over the face, tipped down toward it.
-    const lamp = new THREE.Group();
-    const stem = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.1, 0.014), metal);
-    stem.position.set(0, top + 0.05, z - thickness / 2);
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.012, 0.1), metal);
-    arm.position.set(0, top + 0.1, z - thickness / 2 + 0.05);
-    const housing = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.022, 0.05), metal);
-    housing.position.set(0, top + 0.095, z + 0.07);
-    housing.rotation.x = 0.35;
-    lamp.add(stem, arm, housing);
-    lamp.position.x = centre;
-    group.add(lamp);
+    if (lamps) {
+      // A lamp on a short stem above the panel, its arm reaching out to hang
+      // the housing over the face, tipped down toward it.
+      const lamp = new THREE.Group();
+      const stem = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.1, 0.014), metal);
+      stem.position.set(0, h / 2 + 0.05, z - thickness / 2);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.012, 0.1), metal);
+      arm.position.set(0, h / 2 + 0.1, z - thickness / 2 + 0.05);
+      const housing = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.022, 0.05), metal);
+      housing.position.set(0, h / 2 + 0.095, z + 0.07);
+      housing.rotation.x = 0.35;
+      lamp.add(stem, arm, housing);
+      panel.add(lamp);
+    }
 
     return { item, art, canvas, texture, material, seed: 7 + i };
   });
@@ -383,6 +536,7 @@ export function createGantrySign(
         ctx.fill(new Path2D(art.field));
       }
       weather(ctx, art.width, art.height, seed);
+      if (wear > 0) wearDown(ctx, art.width, art.height, seed, wear);
       texture.needsUpdate = true;
     }
   }

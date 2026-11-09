@@ -107,6 +107,75 @@ const featured = {
       <text x="279" y="172" textAnchor="middle">+ STACKS</text>
     </g>
   ),
+  // A website: a desktop wireframe (nav, a hero with this site's road and
+  // sign gantry, a row of cards, footer), and the same page laid out for a
+  // phone alongside.
+  website: (
+    <g>
+      <path d="M14 10h212 M14 6v8 M226 6v8" />
+      <text x="120" y="8" textAnchor="middle">1440</text>
+      <path d="M14 18h212v148H14z M14 30h212" />
+      <circle cx="21" cy="24" r="2" />
+      <circle cx="28" cy="24" r="2" />
+      <circle cx="35" cy="24" r="2" />
+      <path d="M48 21h150v6H48z" />
+      <path d="M14 42h212 M20 34h18v4H20z M150 36h12 M168 36h12 M186 36h12 M204 36h14" />
+      <path d="M14 104h212 M18 66h204" strokeDasharray="4 3" />
+      <path d="M70 104l34-28 M170 104l-34-28 M120 99v-5 M120 88v-4 M120 80v-3" />
+      <path d="M86 98V74 M154 98V74 M84 74h72 M92 66h22v8H92z M126 66h22v8h-22z" />
+      <text x="20" y="54">HERO / 3D SCENE</text>
+      {[22, 91, 160].map((x) => (
+        <path key={x} d={`M${x} 112h58v34h-58z M${x} 132h58 M${x} 112l58 20 M${x + 58} 112l-58 20 M${x + 4} 138h30 M${x + 4} 142h20`} />
+      ))}
+      <path d="M14 152h212 M22 159h40 M170 159h48" />
+      <text x="120" y="180" textAnchor="middle">DESKTOP</text>
+      <path d="M232 95h12 M240 92l4 3-4 3" strokeDasharray="3 2" />
+      <path d="M254 30h42a6 6 0 0 1 6 6v108a6 6 0 0 1-6 6h-42a6 6 0 0 1-6-6V36a6 6 0 0 1 6-6z M268 35h14 M268 146h14" />
+      <path d="M248 44h54 M254 38h10 M290 37h6 M290 39.5h6 M290 42h6 M248 76h54 M252 58h46" />
+      <path d="M262 76l11-18 M288 76l-11-18" />
+      <path d="M254 82h42v16h-42z M254 102h42v16h-42z M254 122h42v16h-42z" />
+      <path d="M248 158h54 M248 154v8 M302 154v8" />
+      <text x="275" y="170" textAnchor="middle">390</text>
+      <text x="275" y="180" textAnchor="middle">MOBILE</text>
+    </g>
+  ),
+  // A set of polyhedral dice: a large d20 face-on, with a d6, d4, d8 and
+  // d10 drawn alongside, hidden edges dashed.
+  dice: (
+    <g>
+      {/* d20: hexagonal outline, front face, and the edges fanning out. */}
+      <path d="M90 30l50.2 29v58L90 146l-50.2-29V59z" />
+      <path d="M90 62l28 46H62z" />
+      <path d="M90 30v32 M39.8 59L90 62 M140.2 59L90 62 M39.8 59L62 108 M140.2 59L118 108 M39.8 117L62 108 M140.2 117L118 108 M90 146L62 108 M90 146l28-38" />
+      <text x="90" y="96" textAnchor="middle" style={{ fontSize: 11 }}>20</text>
+      <path d="M22 30v116 M18 30h8 M18 146h8" />
+      <text x="18" y="96" transform="rotate(-90 18 96)">Ø 22</text>
+      <text x="90" y="166" textAnchor="middle">D20 · ICOSAHEDRON</text>
+      {/* d6: an isometric cube with its pips. */}
+      <path d="M174 42l26-12 26 12-26 12z M174 42v30l26 12V54 M226 42v30l-26 12" />
+      <circle cx="200" cy="42" r="2" />
+      <circle cx="181" cy="54" r="1.8" />
+      <circle cx="193" cy="72" r="1.8" />
+      <circle cx="207" cy="56" r="1.8" />
+      <circle cx="213" cy="63" r="1.8" />
+      <circle cx="219" cy="70" r="1.8" />
+      <text x="200" y="96" textAnchor="middle">D6</text>
+      {/* d4: a tetrahedron, the back edge hidden. */}
+      <path d="M270 26L242 76l22 12 36-14z M270 26l-6 62" />
+      <path d="M242 76l58-2" strokeDasharray="3 2" />
+      <text x="271" y="100" textAnchor="middle">D4</text>
+      {/* d8: an octahedron, two faces showing. */}
+      <path d="M200 108l24 26-24 30-24-30z M176 134h48" />
+      <path d="M200 108l6 34 M176 134l30 8 M224 134l-18 8 M206 142l-6 22" strokeDasharray="3 2" />
+      <text x="193" y="129" textAnchor="middle">8</text>
+      <text x="200" y="178" textAnchor="middle">D8</text>
+      {/* d10: a pentagonal trapezohedron, kite face forward. */}
+      <path d="M270 110l24 28-2 10-22 18-22-18-2-10z" />
+      <path d="M270 110l-12 32 12 8 12-8z M258 142l-12-4 M282 142l12-4 M270 150v16" />
+      <text x="270" y="140" textAnchor="middle">0</text>
+      <text x="270" y="178" textAnchor="middle">D10</text>
+    </g>
+  ),
 };
 
 export default function Blueprint({ project, index, total }: { project: Project; index: number; total: number }) {

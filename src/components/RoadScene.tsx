@@ -1,17 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import localFont from "next/font/local";
 import { useRouter } from "next/navigation";
 import { useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { site } from "@/lib/site";
 import { createRoadEngine, type RoadEngine } from "./road/engine";
+import { signFont } from "./road/font";
 import { LAYBY_BLUE, LEGEND_FONT_SIZE, SW } from "./road/sign";
 import { layoutGantry } from "./road/world";
-
-// Transport Medium, the alphabet for white legends on UK direction signs
-// (Crown Copyright, Open Government Licence; see fonts/).
-const signFont = localFont({ src: "./road/fonts/transport-medium.ttf" });
 
 // The establishing shot plays once per session.
 const INTRO_KEY = "road-intro-seen";
@@ -164,7 +160,8 @@ export default function RoadScene() {
       </div>
 
       {/* The scene runs on behind the site footer, as on the projects page;
-          a scrim keeps the footer legible over the road. */}
+          a scrim keeps the footer legible over the road. It stays put
+          whether the footer is up or not, so the page looks the same. */}
       <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-linear-to-t from-background/75 to-transparent" />
 
       <div ref={fadeRef} className="pointer-events-none absolute inset-0 bg-background opacity-0" />

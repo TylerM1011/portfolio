@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Footer from "@/components/Footer";
+import PageFade from "@/components/PageFade";
+import Preloader from "@/components/Preloader";
 import { site } from "@/lib/site";
 import "./globals.css";
 
@@ -30,11 +32,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       {/* Each section brings its own <main>: the home page is the full-bleed
           road scene, and the other pages add the site header above theirs.
-          Both pages' scenes run on behind the footer: <body> is the road
-          scene's containing block, and the projects scene is fixed. */}
+          The footer is fixed over the bottom of every page and stays
+          tucked away until the visitor scrolls down (see FooterReveal). */}
       <body className="relative flex min-h-full flex-col">
         {children}
         <Footer />
+        <Preloader />
+        <PageFade />
       </body>
     </html>
   );

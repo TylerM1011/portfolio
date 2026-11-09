@@ -19,6 +19,14 @@
   }
 }
 
+/* The scroll that slides the footer up (see FooterReveal) must not move
+   anything else: without this, macOS and iOS rubber-band the whole page,
+   scenes and all, when it is dragged past its end. */
+html,
+body {
+  overscroll-behavior: none;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
@@ -27,14 +35,81 @@ body {
 
 /* Projects page: blueprints scattered over a construction site. The site is
    a 3D scene (src/components/YardScene.tsx); each sheet is
-   src/components/Blueprint.tsx. */
+   src/components/Blueprint.tsx. The page never scrolls: <main> is the
+   full screen height, and the sheets are sized to fit in it. */
 
+/* Phones: too narrow to stack the sheets without scrolling, so they lie in
+   a row along the top that slides sideways. */
 .blueprints {
+  /* A sheet is about 1.2 times as wide as it is tall. */
+  --sheet: min(26rem, 80vw, calc((50dvh - 5rem) * 1.2));
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 2.75rem 2.5rem;
-  padding: 1rem 0 3rem;
+  justify-content: safe center;
+  gap: 2.5rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  /* Room for the sheets' turn, shadow and lift on hover, which the sideways
+     scroll would otherwise clip. */
+  padding: 1.5rem 1.5rem 3.5rem;
+}
+
+.blueprints::-webkit-scrollbar {
+  display: none;
+}
+
+/* Wider screens: two to a row, scattered. The row is capped at its full
+   width so that, shrunk on shorter screens (below), it still wraps the
+   same way rather than gaining room for a third sheet. */
+@media (min-width: 640px) {
+  .blueprints {
+    --sheet: min(26rem, calc(50% - 1.25rem));
+    max-width: 53rem;
+    margin-inline: auto;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2.75rem 2.5rem;
+    overflow: visible;
+    scroll-snap-type: none;
+    padding: 1rem 0 3rem;
+  }
+}
+
+/* On shorter screens the whole scatter shrinks, lettering and all (a
+   narrower sheet would wrap and cut its title instead), so both rows still
+   fit on screen. At full size the two rows and their padding stand about
+   808px tall, under the 64px above them, with about 105px kept clear at
+   the bottom for the footer to slide up into:
+   each step is the largest scale that fits the shortest screen in its
+   range. */
+@media (min-width: 640px) and (max-height: 979px) {
+  .blueprints {
+    zoom: 0.9;
+  }
+}
+
+@media (min-width: 640px) and (max-height: 895px) {
+  .blueprints {
+    zoom: 0.8;
+  }
+}
+
+@media (min-width: 640px) and (max-height: 814px) {
+  .blueprints {
+    zoom: 0.7;
+  }
+}
+
+@media (min-width: 640px) and (max-height: 734px) {
+  .blueprints {
+    zoom: 0.6;
+  }
+}
+
+@media (min-width: 640px) and (max-height: 653px) {
+  .blueprints {
+    zoom: 0.5;
+  }
 }
 
 .blueprint-wrap {
@@ -43,8 +118,9 @@ body {
   --nudge-x: 0rem;
   --nudge-y: 0rem;
   position: relative;
-  width: 100%;
-  max-width: 26rem;
+  flex: none;
+  width: var(--sheet);
+  scroll-snap-align: center;
 }
 
 .blueprint-wrap:nth-child(4n + 2) {
@@ -61,7 +137,6 @@ body {
 
 @media (min-width: 640px) {
   .blueprint-wrap {
-    width: calc(50% - 1.25rem);
     --nudge-x: -0.75rem;
   }
 
@@ -232,6 +307,38 @@ body {
   }
 }
 
+/* The projects page opens on black (see YardScene). The sheets hold above
+   the site, unseen, until it has cleared, then fall. */
+.yard-cover {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #000;
+  pointer-events: none;
+  transition: opacity 700ms ease-in-out;
+}
+
+.yard-cover[data-state="covered"] {
+  transition: none;
+}
+
+.yard-cover:not([data-state="covered"]) {
+  opacity: 0;
+}
+
+body:has(.yard-cover:not([data-state="lifted"])) .blueprint-wrap,
+body:has(.yard-cover:not([data-state="lifted"])) .blueprint::before,
+body:has(.yard-cover:not([data-state="lifted"])) .blueprint::after {
+  animation-play-state: paused;
+}
+
+/* Without scripts nothing would lift it. */
+@media (scripting: none) {
+  .yard-cover {
+    display: none;
+  }
+}
+
 /* The print: brighter on the left, deepening to the right, on a grid. */
 .blueprint-sheet {
   position: relative;
@@ -385,12 +492,23 @@ body {
   transform: translate(-50%, -50%) rotate(-14deg);
 }
 
-/* Landing page road scene. The rest of its palette lives in
-   src/components/road/palette.ts. */
+/* The page lies over the yard, but lets the pointer through to the
+   signpost behind it everywhere but the sheets themselves. */
+.blueprint {
+  pointer-events: auto;
+}
+
+/* Landing page road scene, and the projects page's signpost. The rest of
+   their palettes live in src/components/road/palette.ts. */
 
 .road-scene {
   /* UK primary route green. */
   --sign: #00703c;
+}
+
+/* The yard's signpost has faded in the sun (see yard/world.ts). */
+.yard-scene {
+  --sign: #2f7552;
 }
 
 /* Dark mode is dusk: the sign sits a little darker against the sunset. */
@@ -398,10 +516,14 @@ body {
   .road-scene {
     --sign: #00653a;
   }
+
+  .yard-scene {
+    --sign: #2b6a4a;
+  }
 }
 
 /* Once the scene models the signs, the HTML signs stay in place as the
    links but show only their focus rings. */
-.road-scene [data-modelled] :is(.road-sign > svg, .road-sign::after) {
+:is(.road-scene, .yard-scene) [data-modelled] :is(.road-sign > svg, .road-sign::after) {
   visibility: hidden;
 }
