@@ -184,8 +184,12 @@ export function createCar() {
     // Fit the blinkers, shadow and lights around the model.
     const size = box.getSize(new THREE.Vector3());
     const tailY = tail.isEmpty() ? CAR_HEIGHT * 0.55 : tail.getCenter(new THREE.Vector3()).y;
-    const tailX = tail.isEmpty() ? size.x * 0.4 : tail.max.x - 0.04;
-    blinkers.forEach((blinker, i) => blinker.position.set((i === 0 ? -1 : 1) * tailX, tailY, box.max.z + 0.02));
+    const tailX = tail.isEmpty() ? size.x * 0.4 : tail.max.x - 0.09;
+    // On the taillight lenses themselves, in from their outer edges and not
+    // out at the bumper (the back of the bounding box), so seen from an
+    // angle they stay on the back of the car instead of floating past it.
+    const tailZ = tail.isEmpty() ? box.max.z + 0.02 : tail.max.z + 0.01;
+    blinkers.forEach((blinker, i) => blinker.position.set((i === 0 ? -1 : 1) * tailX, tailY, tailZ));
     shadow.scale.set(size.x * 1.3, 1, size.z * 1.15);
     glow.position.set(0, tailY, box.max.z + 0.35);
     for (const light of headlights) {

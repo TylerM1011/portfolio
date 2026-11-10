@@ -109,10 +109,10 @@ export function radialTexture(stops: [number, string][]) {
 export const matte = (params: THREE.MeshStandardMaterialParameters = {}) =>
   new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0, ...params });
 
-// Two crossed grass cards. Each face is wound both ways with every normal
+// Two crossed grass cards (shared with the lay-by scene). Each face is wound both ways with every normal
 // pointing up, so grass is lit like the ground it grows from instead of
 // darkening as cards turn away.
-function cardGeometry() {
+export function cardGeometry() {
   const positions: number[] = [];
   const uvs: number[] = [];
   const index: number[] = [];
@@ -134,7 +134,7 @@ function cardGeometry() {
 }
 
 // Bends each card by its height squared, in waves that roll across the meadow.
-function addWind(material: THREE.MeshStandardMaterial, time: { value: number }) {
+export function addWind(material: THREE.MeshStandardMaterial, time: { value: number }) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = time;
     shader.vertexShader = `uniform float uTime;\n${shader.vertexShader}`.replace(

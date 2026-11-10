@@ -1,5 +1,5 @@
 // Every file the 3D scenes load, downloaded once per visit and shared. The
-// site starts fetching all of them as soon as it opens (see Preloader), so
+// site starts fetching all of them on the first load (see LoadingScreen), so
 // whichever page the visitor lands on, the next scene is already in memory.
 // The scenes take the raw bytes and images from here and build their own
 // three.js objects, since each engine disposes of what it built when it stops.
@@ -58,8 +58,10 @@ export function loadImage(url: string, priority: Priority = "auto") {
 
 // Fetches everything at low priority, so a scene already asking for its own
 // files keeps the bandwidth. Already-requested files are left as they are.
-export function preloadAssets() {
-  const quietly = () => {};
-  for (const url of Object.values(MODEL_URLS)) loadBuffer(url, "low").catch(quietly);
-  for (const url of Object.values(TEXTURE_URLS)) loadImage(url, "low").catch(quietly);
+// Settles (never rejects) once every file has loaded or failed.
+export async function preloadAssets() {
+  await Promise.allSettled([
+    ...Object.values(MODEL_URLS).map((url) => loadBuffer(url, "low")),
+    ...Object.values(TEXTURE_URLS).map((url) => loadImage(url, "low")),
+  ]);
 }

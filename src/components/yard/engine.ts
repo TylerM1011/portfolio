@@ -31,7 +31,7 @@ export type YardOptions = {
   onReady?: () => void;
 };
 export type YardEngine = {
-  // Holds the chosen panel lit while the page fades out (see PageFade).
+  // Holds the chosen panel lit while the page fades out (see LoadingScreen).
   leave: (lateral: number) => boolean;
   hint: (lateral: number | null) => void;
   setDark: (dark: boolean) => void;

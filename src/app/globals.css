@@ -33,6 +33,20 @@ body {
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
+/* The loading screen (see LoadingScreen): its layout and the wheel's spin
+   and entrance are inline, so only the wheel's size is set here. */
+.loading-wheel {
+  width: clamp(3.5rem, 10vmin, 5.5rem);
+  height: auto;
+}
+
+/* Without scripts nothing would lift it. */
+@media (scripting: none) {
+  .loading-screen {
+    display: none !important;
+  }
+}
+
 /* Projects page: blueprints scattered over a construction site. The site is
    a 3D scene (src/components/YardScene.tsx); each sheet is
    src/components/Blueprint.tsx. The page never scrolls: <main> is the
@@ -307,36 +321,12 @@ body {
   }
 }
 
-/* The projects page opens on black (see YardScene). The sheets hold above
-   the site, unseen, until it has cleared, then fall. */
-.yard-cover {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  background: #000;
-  pointer-events: none;
-  transition: opacity 700ms ease-in-out;
-}
-
-.yard-cover[data-state="covered"] {
-  transition: none;
-}
-
-.yard-cover:not([data-state="covered"]) {
-  opacity: 0;
-}
-
-body:has(.yard-cover:not([data-state="lifted"])) .blueprint-wrap,
-body:has(.yard-cover:not([data-state="lifted"])) .blueprint::before,
-body:has(.yard-cover:not([data-state="lifted"])) .blueprint::after {
+/* On the projects page the sheets hold above the site, unseen, until the
+   loading screen has cleared, then fall. */
+body:has(.loading-screen:not([data-state="hidden"])) .blueprint-wrap,
+body:has(.loading-screen:not([data-state="hidden"])) .blueprint::before,
+body:has(.loading-screen:not([data-state="hidden"])) .blueprint::after {
   animation-play-state: paused;
-}
-
-/* Without scripts nothing would lift it. */
-@media (scripting: none) {
-  .yard-cover {
-    display: none;
-  }
 }
 
 /* The print: brighter on the left, deepening to the right, on a grid. */
@@ -506,6 +496,11 @@ body:has(.yard-cover:not([data-state="lifted"])) .blueprint::after {
   --sign: #00703c;
 }
 
+/* The lay-by's route sign is kept up by the highway authority. */
+.layby-scene {
+  --sign: #00703c;
+}
+
 /* The yard's signpost has faded in the sun (see yard/world.ts). */
 .yard-scene {
   --sign: #2f7552;
@@ -520,10 +515,33 @@ body:has(.yard-cover:not([data-state="lifted"])) .blueprint::after {
   .yard-scene {
     --sign: #2b6a4a;
   }
+
+  .layby-scene {
+    --sign: #00653a;
+  }
 }
 
 /* Once the scene models the signs, the HTML signs stay in place as the
    links but show only their focus rings. */
-:is(.road-scene, .yard-scene) [data-modelled] :is(.road-sign > svg, .road-sign::after) {
+:is(.road-scene, .yard-scene) [data-modelled] :is(.road-sign > svg, .road-sign::after),
+.layby-scene [data-modelled] :is(.route-sign > svg, .route-sign-row::after) {
   visibility: hidden;
+}
+
+/* Contact page: once the scene models the emergency phone, its link is an
+   invisible box over it, with only its tag (and focus ring) showing. */
+.layby-phone[data-modelled] > svg {
+  visibility: hidden;
+}
+
+/* The tag waits for the loading screen to clear, then fades in. */
+.layby-phone .phone-tag {
+  opacity: 0;
+  transition:
+    opacity 600ms ease 400ms,
+    background-color 150ms;
+}
+
+body:has(.loading-screen[data-state="hidden"]) .layby-phone .phone-tag {
+  opacity: 1;
 }

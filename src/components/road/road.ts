@@ -36,7 +36,7 @@ export const ROAD = {
   lane: LANE,
   // Pulling into the lay-by: drift across between `entry` and `start` to
   // its centre line at `x`, and come to a stop at `stop`.
-  layby: { x: NEAR_SHOULDER - LAYBY_WIDTH / 2, entry: LAYBY.entry, start: LAYBY.start, stop: -18 },
+  layby: { x: NEAR_SHOULDER - LAYBY_WIDTH / 2, entry: LAYBY.entry, start: LAYBY.start, stop: -18, back: LAYBY_BACK },
   metre: M,
   // Gantry posts: on the nearside verge, and in the central reservation on
   // the far side of the barrier, so the gantry spans past the guard rail.

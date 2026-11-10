@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { useLayoutEffect, useRef, useState, type MouseEvent } from "react";
+import { holdScreen } from "@/lib/loading";
 import { site } from "@/lib/site";
-import { fadeToPage } from "./PageFade";
+import { fadeToPage } from "./LoadingScreen";
 import { signFont } from "./road/font";
-import { LAYBY_BLUE, LEGEND_FONT_SIZE, SW } from "./road/sign";
+import { LAYBY_BLUE, LEGEND_FONT_SIZE, ROUTE_YELLOW, SW } from "./road/sign";
 import { createYardEngine, type YardEngine } from "./yard/engine";
 import { layoutSignpost } from "./yard/world";
 
-// Everywhere but here, top to bottom on the signpost. -1 points left, 0
-// back the way you came and 1 right.
+// Everywhere but here, top to bottom on the signpost. The panels carry no
+// arrows; `lateral` (-1 to 1) just tells the scene which panel to light.
 const destinations = site.nav
   .filter((item) => item.href !== "/projects")
   .map((item, i, all) => ({
@@ -35,14 +36,8 @@ const fallbackSign = {
   width: `${signWidth}em`,
   height: `${signHeight}em`,
 };
-const fills = { white: "#ffffff", green: "var(--sign)", blue: LAYBY_BLUE };
+const fills = { white: "#ffffff", green: "var(--sign)", blue: LAYBY_BLUE, yellow: ROUTE_YELLOW };
 
-// The page opens on black, as it leaves (see PageFade), and the black lifts
-// once the scene's first frame is drawn. The blueprints wait for it to clear
-// before they drop in (see globals.css). If the scene never gets going,
-// lift anyway after this long.
-const COVER_MAX_MS = 6000;
-const LIFT_MS = 700;
 
 // The projects page backdrop: a construction site rendered with the same
 // three.js setup as the home page's road scene (see yard/world.ts). It sits
@@ -55,7 +50,6 @@ export default function YardScene() {
   const stageRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<HTMLDivElement>(null);
   const signRef = useRef<HTMLDivElement>(null);
-  const coverRef = useRef<HTMLDivElement>(null);
 
   // Next.js keeps this page alive (hidden) after navigating away, which runs
   // this cleanup; the engine is rebuilt when the visitor returns.
@@ -64,30 +58,11 @@ export default function YardScene() {
     const stage = stageRef.current;
     const camera = cameraRef.current;
     const sign = signRef.current;
-    const cover = coverRef.current;
-    if (!container || !stage || !camera || !sign || !cover) return;
+    if (!container || !stage || !camera || !sign) return;
 
-    // Back to black: Next.js keeps the page's DOM while it is away, so on a
-    // return the cover may still be lifted from last time.
-    cover.dataset.state = "covered";
-    let lifted = false;
-    let frame = 0;
-    let done = 0;
-    const lift = () => {
-      if (lifted) return;
-      lifted = true;
-      // A frame for the scene to settle on screen, then fade.
-      frame = requestAnimationFrame(() => {
-        cover.dataset.state = "lifting";
-        done = window.setTimeout(() => (cover.dataset.state = "lifted"), LIFT_MS);
-      });
-    };
-    const fallback = window.setTimeout(lift, COVER_MAX_MS);
-    const stopCover = () => {
-      cancelAnimationFrame(frame);
-      clearTimeout(done);
-      clearTimeout(fallback);
-    };
+    // The loading screen stays up until the scene's first frame is drawn,
+    // so its gradient is never seen on its own (see lib/loading.ts).
+    const release = holdScreen();
 
     const scheme = window.matchMedia("(prefers-color-scheme: dark)");
     const engine = createYardEngine(
@@ -96,20 +71,20 @@ export default function YardScene() {
         dark: scheme.matches,
         reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
         sign: { font: signFont.style.fontFamily, layout: signpost },
-        onReady: lift,
+        onReady: release,
       },
     );
     if (!engine) {
-      // No WebGL: the gradient is all there is, so lift straight away.
-      lift();
-      return stopCover;
+      // No WebGL: the gradient is all there is.
+      release();
+      return;
     }
     engineRef.current = engine;
     const onScheme = (event: MediaQueryListEvent) => engine.setDark(event.matches);
     scheme.addEventListener("change", onScheme);
 
     return () => {
-      stopCover();
+      release();
       scheme.removeEventListener("change", onScheme);
       engine.dispose();
       engineRef.current = null;
@@ -122,7 +97,7 @@ export default function YardScene() {
     if (modified || event.button !== 0) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-    // Fade to black, then on to the next page (see PageFade).
+    // Fade to black, then on to the next page (see LoadingScreen).
     if (destination) return event.preventDefault();
     if (!fadeToPage(href)) return;
     event.preventDefault();
@@ -188,10 +163,6 @@ export default function YardScene() {
           </div>
         </div>
       </div>
-
-      {/* Covers the whole page, blueprints and footer too, until the scene
-          is ready (see globals.css). */}
-      <div ref={coverRef} aria-hidden data-state="covered" className="yard-cover" />
     </>
   );
 }

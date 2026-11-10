@@ -13,9 +13,9 @@ import { ROAD } from "./road";
 // all-purpose dual carriageway (TSM 7, Appendix E), in world units.
 export const SW = (0.25 / 4) * ROAD.metre;
 
-const BORDER = 1.5; // 2.5.4, with an inside corner radius to match
-const TILE = 8; // 2.2.3: twice the x-height
-const MARGIN = 2.5; // legend to border (Figure 2-4) and between elements
+export const BORDER = 1.5; // 2.5.4, with an inside corner radius to match
+export const TILE = 8; // 2.2.3: twice the x-height
+export const MARGIN = 2.5; // legend to border (Figure 2-4) and between elements
 const SKY = 2; // 9.1.9: added to the top of a sign seen against open sky
 const WORD_SPACE = 2.5; // 2.3.2
 
@@ -34,7 +34,7 @@ const TILE_WIDTHS = new Map(
     .map((entry) => [entry[0], Number(entry.slice(1))]),
 );
 
-function legendWidth(text: string) {
+export function legendWidth(text: string) {
   return [...text].reduce((width, c) => width + (c === " " ? WORD_SPACE : (TILE_WIDTHS.get(c) ?? 4.5)), 0);
 }
 
@@ -42,7 +42,7 @@ function legendWidth(text: string) {
 // their tile (the x-height centred on the tile, 2.2.4); capitals are centred
 // 3.6 sw above the baseline.
 export const LEGEND_FONT_SIZE = 2048 / 272;
-const TILE_TO_BASELINE = 1850 / 272;
+export const TILE_TO_BASELINE = 1850 / 272;
 const CAP_MIDDLE = 978 / 272;
 
 // The standard arrow (Figure 4-4): 16 sw long and 8 sw across, pointing
@@ -74,16 +74,18 @@ const LANE_ARROW_TILE = { width: 18, height: 8 };
 
 // The lay-by symbol's blue.
 export const LAYBY_BLUE = "#1d5bab";
+// Route numbers on primary route signs (TSM 7, 2.1.1).
+export const ROUTE_YELLOW = "#ffcc00";
 
 export type SignItem = { label: string; lateral: number };
-type Fill = "white" | "green" | "blue";
+export type Fill = "white" | "green" | "blue" | "yellow";
 export type Art = {
   width: number;
   height: number;
   // The green field inside the border, for the hover highlight.
   field: string;
   shapes: { d: string; fill: Fill }[];
-  texts: { text: string; x: number; y: number; anchor: "start" | "middle"; fill: Fill }[];
+  texts: { text: string; x: number; y: number; anchor: "start" | "middle" | "end"; fill: Fill }[];
 };
 
 const n = (v: number) => +v.toFixed(3);
@@ -116,7 +118,7 @@ function turn(points: number[][], degrees: number) {
 }
 
 // A sign's border and field.
-function board(width: number, height: number) {
+export function board(width: number, height: number) {
   const field = rounded(BORDER, BORDER, width - 2 * BORDER, height - 2 * BORDER, BORDER);
   const shapes: Art["shapes"] = [
     { d: rounded(0, 0, width, height, 2 * BORDER), fill: "white" },
@@ -202,20 +204,14 @@ export function panelArt(item: SignItem, minWidth = 0) {
   return item.lateral < 0 ? exitArt(item) : laneArt(item, minWidth);
 }
 
-// One panel of a ground-mounted stack-type sign (TSM 7, 4.2): the standard
-// arrow, then the legend. lateral below 0 points left, above 0 right, and 0
-// points down, back the way the car came. The arrow sits in a 16 sw slot so
-// legends line up down the stack; `size` (in sw) lets every panel match the
-// largest.
+// One panel of a ground-mounted stack-type sign (TSM 7, 4.2): the legend
+// alone, no arrow. `size` (in sw) lets every panel match the largest, so the
+// legends line up down the stack.
 export function directionArt(item: SignItem, size = { width: 0, height: 0 }): Art {
-  const arrow = turn(STANDARD_ARROW, item.lateral < 0 ? 0 : item.lateral > 0 ? 180 : -90);
-  const slot = 16;
-  const inner = Math.max(TILE, arrow.height) + 2 * MARGIN;
-  const height = Math.max(size.height, inner + 2 * BORDER);
-  const legendLeft = BORDER + MARGIN + slot + MARGIN;
+  const height = Math.max(size.height, TILE + 2 * MARGIN + 2 * BORDER);
+  const legendLeft = BORDER + MARGIN;
   const width = Math.max(size.width, legendLeft + legendWidth(item.label) + MARGIN + BORDER);
   const { field, shapes } = board(width, height);
-  shapes.push({ d: polygon(arrow.points, BORDER + MARGIN + (slot - arrow.width) / 2, (height - arrow.height) / 2), fill: "white" });
   return {
     width,
     height,
@@ -240,7 +236,7 @@ function rng(seed: number) {
 
 // Grime settled toward the bottom edge, and rain streaks running down from
 // the top.
-function weather(ctx: CanvasRenderingContext2D, width: number, height: number, seed: number) {
+export function weather(ctx: CanvasRenderingContext2D, width: number, height: number, seed: number) {
   const rand = rng(seed);
   const grime = ctx.createLinearGradient(0, height * 0.55, 0, height);
   grime.addColorStop(0, "rgb(60 50 35 / 0)");
@@ -374,7 +370,7 @@ function wearDown(ctx: CanvasRenderingContext2D, width: number, height: number, 
 }
 
 // A plate outline in world units, centred on the origin.
-function outline(width: number, height: number, radius: number) {
+export function outline(width: number, height: number, radius: number) {
   const shape = new THREE.Shape();
   const [x, y] = [-width / 2, -height / 2];
   shape.moveTo(x + radius, y);
@@ -511,7 +507,7 @@ export function createGantrySign(
   });
 
   function draw() {
-    const fills: Record<Fill, string> = { white: "#ffffff", green, blue: LAYBY_BLUE };
+    const fills: Record<Fill, string> = { white: "#ffffff", green, blue: LAYBY_BLUE, yellow: ROUTE_YELLOW };
     for (const { item, art, canvas, texture, seed } of drawn) {
       const ctx = canvas.getContext("2d")!;
       ctx.setTransform(PX, 0, 0, PX, 0, 0);
@@ -527,7 +523,7 @@ export function createGantrySign(
       ctx.font = `${LEGEND_FONT_SIZE}px ${font}`;
       ctx.textBaseline = "alphabetic";
       for (const { text, x, y, anchor, fill } of art.texts) {
-        ctx.textAlign = anchor === "middle" ? "center" : "left";
+        ctx.textAlign = anchor === "middle" ? "center" : anchor === "end" ? "right" : "left";
         ctx.fillStyle = fills[fill];
         ctx.fillText(text, x, y);
       }

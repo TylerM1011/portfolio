@@ -48,6 +48,7 @@ export function createForest({
   rand,
   groundY,
   keepClear,
+  woods,
 }: {
   detail: number;
   rand: () => number;
@@ -56,6 +57,9 @@ export function createForest({
   // Returns true where a tree of this height would block something the
   // camera needs to see (the road, the sign, the sun).
   keepClear: (x: number, z: number, height: number) => boolean;
+  // An extra stand of young pines filling this area, for scenes that look
+  // into the trees rather than down the road.
+  woods?: { x: [number, number]; z: [number, number]; count: number };
 }) {
   const group = new THREE.Group();
   let disposed = false;
@@ -85,6 +89,13 @@ export function createForest({
     for (let i = 0; i < Math.round(1100 * detail); i++) {
       const x = middle + (rand() * 2 - 1) * 300;
       spot(x, groundY, -105 - rand() * 95 - (x * x) / 3000, 4 + rand() * 4.5, treeline);
+    }
+    if (woods) {
+      for (let i = 0; i < Math.round(woods.count * Math.max(detail, 0.6)); i++) {
+        const x = woods.x[0] + rand() * (woods.x[1] - woods.x[0]);
+        const z = woods.z[0] + rand() * (woods.z[1] - woods.z[0]);
+        spot(x, groundY, z, 5 + rand() * 4, far);
+      }
     }
     // Only pines the shadow map can reach cast shadows.
     return { shaded: near.filter((s) => s.z > -45), unshaded: near.filter((s) => s.z <= -45), far, treeline };

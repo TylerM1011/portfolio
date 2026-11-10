@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useLayoutEffect, useRef, useState, type MouseEvent } from "react";
+import { holdScreen } from "@/lib/loading";
 import { site } from "@/lib/site";
 import { createRoadEngine, type RoadEngine } from "./road/engine";
+import { fadeToPage } from "./LoadingScreen";
 import { signFont } from "./road/font";
-import { LAYBY_BLUE, LEGEND_FONT_SIZE, SW } from "./road/sign";
+import { LAYBY_BLUE, LEGEND_FONT_SIZE, ROUTE_YELLOW, SW } from "./road/sign";
 import { layoutGantry } from "./road/world";
 
 // The establishing shot plays once per session.
@@ -14,11 +15,12 @@ const INTRO_KEY = "road-intro-seen";
 
 const destinations = site.nav
   .filter((item) => item.href !== "/")
-  .map((item, i, all) => ({
+  .map((item, i) => ({
     ...item,
-    // -1 is a hard left, 0 straight on, 1 a hard right. The leftmost
-    // destination pulls into the lay-by; right changes lane.
-    lateral: all.length === 1 ? 0 : -1 + (2 * i) / (all.length - 1),
+    // The first destination pulls into the lay-by (-1). The rest take the
+    // lanes in order, matching the gantry (see layoutGantry): 0 is straight
+    // on in the car's own lane, 1 the next lane to the right, and so on.
+    lateral: i === 0 ? -1 : i - 1,
   }));
 
 // UK direction signs on the gantry, one per destination (see road/sign.ts
@@ -38,10 +40,9 @@ const fallbackSign = {
   width: `${signWidth}em`,
   height: `${signHeight}em`,
 };
-const fills = { white: "#ffffff", green: "var(--sign)", blue: LAYBY_BLUE };
+const fills = { white: "#ffffff", green: "var(--sign)", blue: LAYBY_BLUE, yellow: ROUTE_YELLOW };
 
 export default function RoadScene() {
-  const router = useRouter();
   const [destination, setDestination] = useState<{ href: string; lateral: number } | null>(null);
   const engineRef = useRef<RoadEngine | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -60,6 +61,9 @@ export default function RoadScene() {
     const fade = fadeRef.current;
     if (!container || !stage || !camera || !sign || !fade) return;
 
+    // The loading screen stays up until the first frame is drawn, so the
+    // sky gradient behind the scene is never seen on its own.
+    const release = holdScreen();
     const scheme = window.matchMedia("(prefers-color-scheme: dark)");
     let intro = false;
     try {
@@ -73,6 +77,7 @@ export default function RoadScene() {
         reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
         intro,
         sign: { font: signFont.style.fontFamily, gantry },
+        onReady: release,
         onIntroEnd: () => {
           try {
             sessionStorage.setItem(INTRO_KEY, "1");
@@ -80,12 +85,17 @@ export default function RoadScene() {
         },
       },
     );
-    if (!engine) return;
+    if (!engine) {
+      // No WebGL: the gradient is all there is.
+      release();
+      return;
+    }
     engineRef.current = engine;
     const onScheme = (event: MediaQueryListEvent) => engine.setDark(event.matches);
     scheme.addEventListener("change", onScheme);
 
     return () => {
+      release();
       scheme.removeEventListener("change", onScheme);
       engine.dispose();
       engineRef.current = null;
@@ -100,7 +110,12 @@ export default function RoadScene() {
     if (!engine || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     event.preventDefault();
-    if (engine.drive(lateral, () => router.push(href))) setDestination({ href, lateral });
+    // The drive ends on black; the loading screen takes over from there
+    // until the next page is in.
+    const arrive = () => {
+      if (!fadeToPage(href, 0)) window.location.assign(href);
+    };
+    if (engine.drive(lateral, arrive)) setDestination({ href, lateral });
   }
 
   const hint = (lateral: number | null) => engineRef.current?.hint(lateral);
@@ -164,7 +179,7 @@ export default function RoadScene() {
           whether the footer is up or not, so the page looks the same. */}
       <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-linear-to-t from-background/75 to-transparent" />
 
-      <div ref={fadeRef} className="pointer-events-none absolute inset-0 bg-background opacity-0" />
+      <div ref={fadeRef} className="pointer-events-none absolute inset-0 bg-black opacity-0" />
     </div>
   );
 }

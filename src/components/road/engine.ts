@@ -78,6 +78,8 @@ export type RoadOptions = {
   intro: boolean;
   onIntroEnd: () => void;
   sign: { font: string; gantry: GantryLayout };
+  // Called once the first frame is on screen.
+  onReady?: () => void;
 };
 
 export type RoadEngine = {
@@ -122,7 +124,8 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
   } catch {
     return null;
   }
-  canvas.className = "absolute inset-0 h-full w-full opacity-0 transition-opacity duration-1200";
+  // Shown at once with the first frame, under the loading screen.
+  canvas.className = "absolute inset-0 h-full w-full opacity-0";
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -379,6 +382,7 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
     if (!shown) {
       shown = true;
       canvas.style.opacity = "1";
+      options.onReady?.();
     }
   }
 
