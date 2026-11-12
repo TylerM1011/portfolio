@@ -1,8 +1,9 @@
 import * as THREE from "three";
-import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
+import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { TEXTURE_URLS } from "@/lib/assets";
 import { createCar } from "../road/car";
 import { createForest } from "../road/forest";
+import { createPhone, handset } from "../road/phone";
 import type { Palette } from "../road/palette";
 import { createRoad, ROAD } from "../road/road";
 import { day, dusk } from "./palette";
@@ -47,31 +48,6 @@ const PARKED_Z = -16.3;
 // The woods behind the verge.
 const WOODS = { x: [-15, -6] as [number, number], z: [-4, -26] as [number, number], count: 150 };
 
-// Draws a telephone handset, centred at (x, y), r across, turned so its
-// earpiece is at the top left (as on the SOS signs).
-function handset(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, fill: string) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(-Math.PI / 4);
-  ctx.fillStyle = fill;
-  ctx.strokeStyle = fill;
-  ctx.lineCap = "round";
-  ctx.lineWidth = r * 0.32;
-  ctx.beginPath();
-  ctx.arc(0, r * 0.55, r * 0.95, Math.PI * 1.22, Math.PI * 1.78);
-  ctx.stroke();
-  for (const side of [-1, 1]) {
-    ctx.save();
-    ctx.translate(side * r * 0.62, -r * 0.08);
-    ctx.rotate(side * 0.55);
-    ctx.beginPath();
-    ctx.roundRect(-r * 0.24, -r * 0.12, r * 0.48, r * 0.5, r * 0.16);
-    ctx.fill();
-    ctx.restore();
-  }
-  ctx.restore();
-}
-
 // The blue marker sign (as on UK motorways): a white-bordered blue plate,
 // a yellow panel pointing toward the nearest emergency telephone with a
 // handset and "SOS" on it, and a column of white location marks.
@@ -108,47 +84,6 @@ function markerTexture() {
   });
 }
 
-// The emergency telephone's door: an orange flap with "SOS" on a white
-// plate, a handset, and the instruction to pull it open.
-function doorTexture() {
-  return canvasTexture(256, 320, (ctx) => {
-    ctx.fillStyle = "#ec7a1c";
-    ctx.fillRect(0, 0, 256, 320);
-    ctx.strokeStyle = "rgba(0,0,0,0.25)";
-    ctx.lineWidth = 6;
-    ctx.strokeRect(10, 10, 236, 300);
-    ctx.fillStyle = "#f7f4ec";
-    ctx.beginPath();
-    ctx.roundRect(34, 34, 188, 80, 10);
-    ctx.fill();
-    ctx.fillStyle = "#151515";
-    ctx.font = "800 64px system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("SOS", 128, 77);
-    handset(ctx, 128, 182, 62, "#151515");
-    ctx.font = "700 20px system-ui, sans-serif";
-    ctx.fillText("PULL TO OPEN", 128, 266);
-    ctx.fillStyle = "#2b2b2b";
-    ctx.fillRect(36, 150, 14, 52);
-  });
-}
-
-// A card stuck inside the door, read once it swings open.
-function cardTexture() {
-  return canvasTexture(256, 160, (ctx) => {
-    ctx.fillStyle = "#f6f3ea";
-    ctx.fillRect(0, 0, 256, 160);
-    ctx.fillStyle = "#151515";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = "800 54px system-ui, sans-serif";
-    ctx.fillText("CV", 128, 62);
-    ctx.font = "600 19px system-ui, sans-serif";
-    ctx.fillText("LIFT HANDSET", 128, 118);
-  });
-}
-
 // The bin's wrap: dark green steel, gold bands and the word LITTER, centred
 // on the back of the texture (the body is turned to bring it round).
 function binTexture() {
@@ -181,96 +116,6 @@ function shadowed<T extends THREE.Object3D>(object: T) {
     child.receiveShadow = true;
   });
   return object;
-}
-
-// The roadside emergency telephone: an orange housing on a post, its door
-// hinged on the right (away from the camera). Behind the door, the handset on its hook and a card.
-// `box` is everything above the post (it shakes when the phone rings);
-// `bounds` is what the HTML link covers on screen.
-function createPhone(galvanised: THREE.Material) {
-  const W = 0.5 * M;
-  const H = 0.62 * M;
-  const D = 0.3 * M;
-  const T = 0.025 * M;
-  const POST = 0.82 * M;
-  const orange = new THREE.MeshStandardMaterial({ color: 0xec7a1c, roughness: 0.55 });
-  const inside = matte({ color: 0x1e2024 });
-  const black = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.35 });
-
-  const group = new THREE.Group();
-  group.add(new THREE.Mesh(new THREE.BoxGeometry(0.36 * M, 0.08 * M, 0.36 * M).translate(0, 0.04 * M, 0), matte({ color: 0xa9a59c })));
-  group.add(new THREE.Mesh(new THREE.BoxGeometry(0.09 * M, POST, 0.09 * M).translate(0, POST / 2, 0), galvanised));
-
-  const box = new THREE.Group();
-  box.position.y = POST;
-  group.add(box);
-  // The shell, open at the front: back, sides, bottom and a hood.
-  box.add(
-    new THREE.Mesh(
-      mergeGeometries([
-        new THREE.BoxGeometry(W, H, T).translate(0, H / 2, -D / 2 + T / 2),
-        new THREE.BoxGeometry(T, H, D).translate(-W / 2 + T / 2, H / 2, 0),
-        new THREE.BoxGeometry(T, H, D).translate(W / 2 - T / 2, H / 2, 0),
-        new THREE.BoxGeometry(W, T, D).translate(0, T / 2, 0),
-        new THREE.BoxGeometry(W + 0.06 * M, 0.05 * M, D + 0.1 * M).translate(0, H + 0.025 * M, 0.03 * M),
-      ]),
-      orange,
-    ),
-  );
-  box.add(new THREE.Mesh(new THREE.BoxGeometry(W - 2 * T, H - 2 * T, 0.004).translate(0, H / 2, -D / 2 + T + 0.002), inside));
-
-  // The handset, hanging on its hook against the back wall.
-  const phone = new THREE.Group();
-  phone.position.set(-0.13 * M, H * 0.55, -D / 2 + T + 0.03 * M);
-  phone.add(
-    new THREE.Mesh(
-      mergeGeometries([
-        new THREE.BoxGeometry(0.06 * M, 0.3 * M, 0.05 * M),
-        new THREE.BoxGeometry(0.1 * M, 0.08 * M, 0.08 * M).translate(0, 0.17 * M, 0.02 * M),
-        new THREE.BoxGeometry(0.1 * M, 0.08 * M, 0.08 * M).translate(0, -0.17 * M, 0.02 * M),
-      ]),
-      black,
-    ),
-  );
-  box.add(phone);
-  box.add(new THREE.Mesh(new THREE.BoxGeometry(0.03 * M, 0.06 * M, 0.06 * M).translate(-0.13 * M, H * 0.55 + 0.2 * M, -D / 2 + T + 0.03 * M), galvanised));
-  // A coiled cord, down to the box's floor.
-  const cord = new THREE.Mesh(
-    new THREE.TubeGeometry(
-      new THREE.CatmullRomCurve3(
-        Array.from({ length: 40 }, (_, i) => {
-          const t = i / 39;
-          const a = t * Math.PI * 18;
-          return new THREE.Vector3(
-            -0.13 * M + 0.08 * M * t + Math.cos(a) * 0.012 * M,
-            H * 0.55 - 0.2 * M - t * 0.12 * M + Math.sin(a) * 0.012 * M,
-            -D / 2 + T + 0.04 * M,
-          );
-        }),
-      ),
-      80,
-      0.006 * M,
-      5,
-    ),
-    black,
-  );
-  box.add(cord);
-  const card = new THREE.Mesh(new THREE.PlaneGeometry(0.22 * M, 0.14 * M), matte({ map: cardTexture() }));
-  card.position.set(0.09 * M, H * 0.6, -D / 2 + T + 0.006);
-  box.add(card);
-
-  // The door swings out from its hinge on the right.
-  const door = new THREE.Group();
-  door.position.set(W / 2, 0, D / 2);
-  const face = new THREE.MeshStandardMaterial({ map: doorTexture(), roughness: 0.55 });
-  const doorInside = new THREE.MeshStandardMaterial({ color: 0xd56c16, roughness: 0.6 });
-  door.add(
-    new THREE.Mesh(new THREE.BoxGeometry(W, H, T).translate(-W / 2, H / 2, -T / 2), [orange, orange, orange, orange, face, doorInside]),
-  );
-  box.add(door);
-
-  shadowed(group);
-  return { group, box, door, handset: phone, bounds: box, material: orange };
 }
 
 // The SOS marker: the blue plate on a pair of posts.
@@ -406,7 +251,7 @@ export function buildLayby({
   // Everything on the verge turns to face the camera, the phone a little
   // further so it shows its side.
   const facing = (x: number, z: number) => Math.atan2(EYE.x - x, EYE.z - z);
-  const phone = createPhone(mats.galvanised);
+  const phone = createPhone({ post: mats.galvanised });
   phone.group.position.set(PHONE.x, GROUND_Y, PHONE.z);
   // A touch over life size, so it holds its own in the shot.
   phone.group.scale.setScalar(1.25);
@@ -649,22 +494,13 @@ export function buildLayby({
     }
   }
 
-  // Phone state: `open` (0 shut, 1 wide) and `lift` (handset off the hook,
-  // 0 to 1) are eased toward by the engine; `ring` shakes the box.
-  const handsetRest = phone.handset.position.clone();
-  function update(time: number, state: { open: number; lift: number; ring: number }) {
+  function update(time: number) {
     // Hazard lights, about 90 flashes a minute. Only the near side's: from
     // here the far lamp is round the car's rear corner, so its glow would
     // hang in the air past the bodywork.
     const [far, near] = parked.blinkers;
     far.visible = false;
     near.visible = Math.floor(time * 3) % 2 === 0;
-
-    phone.door.rotation.y = state.open * 1.9;
-    phone.handset.position.set(handsetRest.x + state.lift * 0.04, handsetRest.y + state.lift * 0.05, handsetRest.z + state.lift * 0.16);
-    phone.handset.rotation.set(state.lift * 0.5, 0, state.lift * -0.6);
-    phone.box.rotation.z = Math.sin(time * 55) * 0.018 * state.ring;
-    phone.box.position.x = Math.sin(time * 47) * 0.003 * state.ring;
   }
 
   const ready = Promise.allSettled([parked.ready, forest.ready, ...textureLoads, sign.ready]);
@@ -683,6 +519,6 @@ export function buildLayby({
     apply,
     update,
     sign,
-    phone: phone.bounds,
+    phone,
   };
 }

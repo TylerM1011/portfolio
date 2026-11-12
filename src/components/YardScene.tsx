@@ -4,16 +4,20 @@ import Link from "next/link";
 import { useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { holdScreen } from "@/lib/loading";
 import { site } from "@/lib/site";
+import { PhoneButton, useEmergencyPhone } from "./EmergencyPhone";
 import { fadeToPage } from "./LoadingScreen";
+import PhoneDial from "./PhoneDial";
 import { signFont } from "./road/font";
 import { LAYBY_BLUE, LEGEND_FONT_SIZE, ROUTE_YELLOW, SW } from "./road/sign";
 import { createYardEngine, type YardEngine } from "./yard/engine";
 import { layoutSignpost } from "./yard/world";
 
-// Everywhere but here, top to bottom on the signpost. The panels carry no
-// arrows; `lateral` (-1 to 1) just tells the scene which panel to light.
+// Everywhere but here, top to bottom on the signpost, except the contact
+// page: from here, the emergency phone beside the signpost is the way to get
+// in touch. The panels carry no arrows; `lateral` (-1 to 1) just tells the
+// scene which panel to light.
 const destinations = site.nav
-  .filter((item) => item.href !== "/projects")
+  .filter((item) => item.href !== "/projects" && item.href !== "/contact")
   .map((item, i, all) => ({
     ...item,
     lateral: all.length === 1 ? 0 : -1 + (2 * i) / (all.length - 1),
@@ -36,13 +40,21 @@ const fallbackSign = {
   width: `${signWidth}em`,
   height: `${signHeight}em`,
 };
+// Without WebGL, the SOS marker sign stands in for the phone, left of the
+// signpost.
+const fallbackPhone = {
+  left: "56%",
+  bottom: "12rem",
+  width: "clamp(3.5rem, 8vw, 6rem)",
+};
 const fills = { white: "#ffffff", green: "var(--sign)", blue: LAYBY_BLUE, yellow: ROUTE_YELLOW };
 
 
 // The projects page backdrop: a construction site rendered with the same
 // three.js setup as the home page's road scene (see yard/world.ts). It sits
-// fixed behind the page. Before the engine starts, or without WebGL, a
-// sky-to-dirt gradient stands in.
+// fixed behind the page. Beside the signpost, a battered emergency phone
+// dials the CV, LinkedIn and GitHub (see PhoneDial). Before the engine
+// starts, or without WebGL, a sky-to-dirt gradient stands in.
 export default function YardScene() {
   const [destination, setDestination] = useState<string | null>(null);
   const engineRef = useRef<YardEngine | null>(null);
@@ -50,6 +62,8 @@ export default function YardScene() {
   const stageRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<HTMLDivElement>(null);
   const signRef = useRef<HTMLDivElement>(null);
+  const phone = useEmergencyPhone(engineRef);
+  const { ref: phoneRef, reset: resetPhone } = phone;
 
   // Next.js keeps this page alive (hidden) after navigating away, which runs
   // this cleanup; the engine is rebuilt when the visitor returns.
@@ -58,7 +72,8 @@ export default function YardScene() {
     const stage = stageRef.current;
     const camera = cameraRef.current;
     const sign = signRef.current;
-    if (!container || !stage || !camera || !sign) return;
+    const phoneButton = phoneRef.current;
+    if (!container || !stage || !camera || !sign || !phoneButton) return;
 
     // The loading screen stays up until the scene's first frame is drawn,
     // so its gradient is never seen on its own (see lib/loading.ts).
@@ -66,7 +81,7 @@ export default function YardScene() {
 
     const scheme = window.matchMedia("(prefers-color-scheme: dark)");
     const engine = createYardEngine(
-      { container, stage, camera, sign },
+      { container, stage, camera, sign, phone: phoneButton },
       {
         dark: scheme.matches,
         reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -89,8 +104,9 @@ export default function YardScene() {
       engine.dispose();
       engineRef.current = null;
       setDestination(null);
+      resetPhone();
     };
-  }, []);
+  }, [phoneRef, resetPhone]);
 
   function leave(event: MouseEvent<HTMLAnchorElement>, href: string, lateral: number) {
     const modified = event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
@@ -162,7 +178,11 @@ export default function YardScene() {
             </div>
           </div>
         </div>
+
+        <PhoneButton {...phone.button} fallback={fallbackPhone} />
       </div>
+
+      <PhoneDial {...phone.dial} />
     </>
   );
 }

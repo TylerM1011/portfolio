@@ -6,9 +6,9 @@ export const metadata: Metadata = {
 };
 
 // No site header here: as on the projects page, the route sign on the bank
-// (in LaybyScene) is the way out, and the emergency phone by the lay-by is
-// the link to the CV. <main> takes the full height and lets the pointer
-// through to the scene behind it.
+// (in LaybyScene) is the way out, and the emergency phone by the lay-by
+// dials the CV, LinkedIn and GitHub. <main> takes the full height and lets
+// the pointer through to the scene behind it.
 export default function ContactPage() {
   return (
     <>

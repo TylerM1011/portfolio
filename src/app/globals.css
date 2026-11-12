@@ -528,20 +528,57 @@ body:has(.loading-screen:not([data-state="hidden"])) .blueprint::after {
   visibility: hidden;
 }
 
-/* Contact page: once the scene models the emergency phone, its link is an
-   invisible box over it, with only its tag (and focus ring) showing. */
-.layby-phone[data-modelled] > svg {
+/* The phone's dial (PhoneDial). Hidden, it lets the pointer through to the
+   scene; it stays visible while it shrinks back into the phone. */
+.phone-dial {
   visibility: hidden;
+  pointer-events: none;
+  transition: visibility 0s 450ms;
 }
 
-/* The tag waits for the loading screen to clear, then fades in. */
-.layby-phone .phone-tag {
+.phone-dial[data-open] {
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+
+/* It grows out of the phone as the camera pushes in, and shrinks back. */
+.phone-dial-panel {
   opacity: 0;
+  transform: translate(var(--from-x, 0), var(--from-y, 0)) scale(0.12);
   transition:
-    opacity 600ms ease 400ms,
-    background-color 150ms;
+    transform 450ms cubic-bezier(0.5, 0, 0.75, 0),
+    opacity 250ms ease 200ms;
 }
 
-body:has(.loading-screen[data-state="hidden"]) .layby-phone .phone-tag {
+.phone-dial[data-open] .phone-dial-panel {
   opacity: 1;
+  transform: none;
+  transition:
+    transform 700ms cubic-bezier(0.16, 1, 0.3, 1) 250ms,
+    opacity 250ms ease 250ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phone-dial-panel,
+  .phone-dial[data-open] .phone-dial-panel {
+    transform: none;
+    transition: opacity 200ms;
+  }
+}
+
+/* The ring round a hole on the dial: faint on hover, yellow on focus and
+   while that number is being dialled. */
+.dial-ring {
+  stroke: transparent;
+  transition: stroke 150ms;
+}
+
+.dial-hole:hover .dial-ring {
+  stroke: rgb(255 210 0 / 0.55);
+}
+
+.dial-hole:focus-visible .dial-ring,
+.dial-hole[data-active] .dial-ring {
+  stroke: #ffd200;
 }

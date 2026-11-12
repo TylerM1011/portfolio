@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { holdScreen } from "@/lib/loading";
 import { site } from "@/lib/site";
+import { PhoneButton, useEmergencyPhone } from "./EmergencyPhone";
 import { fadeToPage } from "./LoadingScreen";
+import PhoneDial from "./PhoneDial";
 import { createLaybyEngine, type LaybyEngine } from "./layby/engine";
 import { routeSignArt } from "./layby/sign";
 import { signFont } from "./road/font";
@@ -40,15 +42,15 @@ const fallbackPhone = {
   left: "62%",
   bottom: "9rem",
   width: "clamp(4.5rem, 11vw, 8rem)",
-  aspectRatio: "320 / 448",
 };
 const fills = { white: "#ffffff", green: "var(--sign)", blue: LAYBY_BLUE, yellow: ROUTE_YELLOW };
 
 
 // The contact page backdrop: the lay-by the car pulled into on the home page
-// (see layby/world.ts), with an emergency telephone on the verge. The phone
-// is the link to the CV. The scene sits fixed behind the page; before the
-// engine starts, or without WebGL, a sky-to-meadow gradient stands in.
+// (see layby/world.ts), with an emergency telephone on the verge. Picking up
+// the phone zooms in on its dial, which reaches the CV, LinkedIn and GitHub
+// (see PhoneDial). The scene sits fixed behind the page; before the engine
+// starts, or without WebGL, a sky-to-meadow gradient stands in.
 export default function LaybyScene() {
   const [destination, setDestination] = useState<string | null>(null);
   const engineRef = useRef<LaybyEngine | null>(null);
@@ -56,7 +58,8 @@ export default function LaybyScene() {
   const stageRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<HTMLDivElement>(null);
   const signRef = useRef<HTMLDivElement>(null);
-  const phoneRef = useRef<HTMLAnchorElement>(null);
+  const phone = useEmergencyPhone(engineRef);
+  const { ref: phoneRef, reset: resetPhone } = phone;
 
   // Next.js keeps this page alive (hidden) after navigating away, which runs
   // this cleanup; the engine is rebuilt when the visitor returns.
@@ -65,8 +68,8 @@ export default function LaybyScene() {
     const stage = stageRef.current;
     const camera = cameraRef.current;
     const sign = signRef.current;
-    const phone = phoneRef.current;
-    if (!container || !stage || !camera || !sign || !phone) return;
+    const phoneButton = phoneRef.current;
+    if (!container || !stage || !camera || !sign || !phoneButton) return;
 
     // The loading screen stays up until the scene's first frame is drawn,
     // so its gradient is never seen on its own (see lib/loading.ts).
@@ -74,7 +77,7 @@ export default function LaybyScene() {
 
     const scheme = window.matchMedia("(prefers-color-scheme: dark)");
     const engine = createLaybyEngine(
-      { container, stage, camera, sign, phone },
+      { container, stage, camera, sign, phone: phoneButton },
       {
         dark: scheme.matches,
         reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -97,8 +100,9 @@ export default function LaybyScene() {
       engine.dispose();
       engineRef.current = null;
       setDestination(null);
+      resetPhone();
     };
-  }, []);
+  }, [phoneRef, resetPhone]);
 
   function leave(event: MouseEvent<HTMLAnchorElement>, href: string) {
     const modified = event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
@@ -114,7 +118,6 @@ export default function LaybyScene() {
   }
 
   const hint = (href: string | null) => engineRef.current?.hint(href);
-  const hoverPhone = (on: boolean) => engineRef.current?.hoverPhone(on);
 
   return (
     <>
@@ -168,41 +171,13 @@ export default function LaybyScene() {
           </div>
         </div>
 
-        {/* The emergency telephone. The engine keeps this link fitted over
-            the phone on screen; its tag, below it on the lay-by, says what
-            it is for (kept to the phone's right edge on narrow screens, where
-            the phone stands near the edge of the shot). Opens the CV
-            in a new tab while the door swings open in the scene. */}
-        <a
-          ref={phoneRef}
-          href={site.cv}
-          target="_blank"
-          rel="noopener"
-          onClick={() => engineRef.current?.callPhone()}
-          onPointerEnter={() => hoverPhone(true)}
-          onPointerLeave={() => hoverPhone(false)}
-          onFocus={() => hoverPhone(true)}
-          onBlur={() => hoverPhone(false)}
-          style={fallbackPhone}
-          className="layby-phone group pointer-events-auto absolute rounded-md focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#ffd200]"
-        >
-          <svg aria-hidden viewBox="0 0 320 448" className="absolute inset-0 h-full w-full">
-            <rect width="320" height="448" rx="22" fill="#fff" />
-            <rect x="12" y="12" width="296" height="424" rx="14" fill={LAYBY_BLUE} />
-            <path d="M30 224 222 70v308z" fill="#fff" />
-            <path d="M43 224 214 78v292z" fill="#f2b417" />
-            <text x="150" y="296" textAnchor="middle" fontSize="50" fontWeight="700" fill="#111">
-              SOS
-            </text>
-            <text x="164" y="232" textAnchor="middle" fontSize="80" fill="#111">
-              ✆
-            </text>
-          </svg>
-          <span className="phone-tag pointer-events-none absolute top-full left-1/2 mt-2 -translate-x-1/2 rounded-full max-sm:right-0 max-sm:left-auto max-sm:translate-x-0 bg-black/70 px-3 py-1.5 text-xs font-medium whitespace-nowrap text-white shadow-lg backdrop-blur-sm transition group-hover:bg-black/85 group-focus-visible:bg-black/85">
-            <span aria-hidden>☎ </span>Emergency phone: call for my CV
-          </span>
-        </a>
+        {/* The emergency telephone. The engine keeps this button fitted
+            over the phone on screen. Picking it up opens the door, pushes
+            the camera in, and brings up the dial. */}
+        <PhoneButton {...phone.button} fallback={fallbackPhone} />
       </div>
+
+      <PhoneDial {...phone.dial} />
     </>
   );
 }

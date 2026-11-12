@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { disposeTree } from "../road/car";
 import { cameraCSS, objectCSS } from "../road/engine";
+import { createPhoneRig } from "../road/phone";
 import { createPost } from "../road/post";
 import { SW } from "../road/sign";
 import { day, dusk } from "./palette";
@@ -22,6 +23,7 @@ export type YardElements = {
   stage: HTMLElement;
   camera: HTMLElement;
   sign: HTMLElement;
+  phone: HTMLElement;
 };
 export type YardOptions = {
   dark: boolean;
@@ -34,6 +36,10 @@ export type YardEngine = {
   // Holds the chosen panel lit while the page fades out (see LoadingScreen).
   leave: (lateral: number) => boolean;
   hint: (lateral: number | null) => void;
+  // The emergency phone (see road/phone.ts).
+  hoverPhone: (on: boolean) => void;
+  openDial: (on: boolean) => void;
+  callPhone: () => void;
   setDark: (dark: boolean) => void;
   dispose: () => void;
 };
@@ -96,6 +102,8 @@ export function createYardEngine(el: YardElements, options: YardOptions): YardEn
   const signMatrix = new THREE.Matrix4();
   Object.assign(el.sign.style, { left: "0", top: "0", fontSize: `${SW * SIGN_PX_PER_UNIT}px` });
   el.sign.setAttribute("data-modelled", "");
+  // The phone's button is a plain box over the phone, refitted every frame.
+  const phone = createPhoneRig(world.phone, { element: el.phone, reducedMotion: options.reducedMotion });
   // Out to the side, 70% of the way to the edge of the shot at its depth,
   // clear of the sheets but still in view on narrow screens.
   function placeSign() {
@@ -161,11 +169,15 @@ export function createYardEngine(el: YardElements, options: YardOptions): YardEn
     const settle = 1 - Math.exp(-dt * 2.5);
     pointer.smoothX += (pointer.x - pointer.smoothX) * settle;
     pointer.smoothY += (pointer.y - pointer.smoothY) * settle;
-    // A slow handheld drift, leaning toward the pointer.
+    // A slow handheld drift, leaning toward the pointer. Up close to the
+    // phone, only a trace of it is left.
+    const k = phone.step(time, dt);
+    const drift = motion * (1 - 0.9 * k);
     const handX = (Math.sin(time * 0.4) * 0.7 + Math.sin(time * 1.1 + 1.3) * 0.3) * 0.03;
     const handY = (Math.sin(time * 0.5 + 0.4) * 0.7 + Math.sin(time * 1.3) * 0.3) * 0.015;
-    eye.set(EYE.x + (pointer.smoothX * 0.6 + handX) * motion, EYE.y + (-pointer.smoothY * 0.15 + handY) * motion, EYE.z);
-    look.set(LOOK.x + pointer.smoothX * 1.2 * motion, LOOK.y, LOOK.z);
+    eye.set(EYE.x + (pointer.smoothX * 0.6 + handX) * drift, EYE.y + (-pointer.smoothY * 0.15 + handY) * drift, EYE.z);
+    look.set(LOOK.x + pointer.smoothX * 1.2 * drift, LOOK.y, LOOK.z);
+    phone.frame(eye, look, k, camera.fov);
     camera.position.copy(eye);
     camera.lookAt(look);
     camera.updateMatrixWorld();
@@ -180,7 +192,7 @@ export function createYardEngine(el: YardElements, options: YardOptions): YardEn
       (height * renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
 
     grade.uTime.value = time;
-    grade.uBlur.value = 0;
+    grade.uBlur.value = phone.blur;
     grade.uAberration.value = 0.0015;
     grade.uVignette.value = 0.45;
     composer.render(dt);
@@ -188,6 +200,7 @@ export function createYardEngine(el: YardElements, options: YardOptions): YardEn
     const focal = camera.projectionMatrix.elements[5] * (height / 2);
     el.camera.style.transform = `perspective(${focal}px) translateZ(${focal}px)${cameraCSS(camera.matrixWorldInverse)} translate(${width / 2}px,${height / 2}px)`;
     el.sign.style.pointerEvents = leaving ? "none" : "";
+    phone.fit(camera, width, height, grade.uCenter.value);
 
     if (!shown) {
       shown = true;
@@ -205,6 +218,9 @@ export function createYardEngine(el: YardElements, options: YardOptions): YardEn
     hint(lateral) {
       hint = lateral;
     },
+    hoverPhone: phone.hover,
+    openDial: phone.openDial,
+    callPhone: phone.call,
     setDark,
     dispose() {
       cancelAnimationFrame(frame);
@@ -221,6 +237,7 @@ export function createYardEngine(el: YardElements, options: YardOptions): YardEn
       canvas.remove();
       el.sign.style.cssText = signStyle;
       el.sign.removeAttribute("data-modelled");
+      phone.dispose();
       el.camera.style.cssText = cameraStyle;
     },
   };

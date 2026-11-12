@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { disposeTree } from "../road/car";
 import { cameraCSS, objectCSS } from "../road/engine";
 import { day, dusk } from "./palette";
+import { createPhoneRig } from "../road/phone";
 import { createPost } from "../road/post";
 import { SW } from "../road/sign";
 import type { RouteSignArt } from "./sign";
@@ -16,12 +17,6 @@ const MAX_FOV = 74;
 // The route sign's HTML links are laid out in em, one stroke width (see
 // road/sign.ts), at 400px to a world unit, as on the other scenes.
 const SIGN_PX_PER_UNIT = 400;
-
-// The phone rings for this long every RING_EVERY seconds, until the visitor
-// has had a go at it. The door stays open this long after a call.
-const RING_EVERY = 7;
-const RING_FOR = 1.1;
-const CALL_HOLD = 6;
 
 export type LaybyElements = {
   container: HTMLElement;
@@ -41,9 +36,9 @@ export type LaybyEngine = {
   // Holds the chosen line lit while the page fades out (see LoadingScreen).
   leave: (href: string) => boolean;
   hint: (href: string | null) => void;
-  // The pointer or focus is on the phone: the door eases ajar.
+  // The emergency phone (see road/phone.ts).
   hoverPhone: (on: boolean) => void;
-  // The phone was used: the door swings open and the handset comes off.
+  openDial: (on: boolean) => void;
   callPhone: () => void;
   setDark: (dark: boolean) => void;
   dispose: () => void;
@@ -59,8 +54,6 @@ function fitFov(aspect: number) {
 // leaving the bin and the car out to the right.
 const SLIDE_BELOW = 1.5;
 const SLIDE = 1.8;
-
-const approach = (value: number, target: number, rate: number, dt: number) => value + (target - value) * (1 - Math.exp(-dt * rate));
 
 export function createLaybyEngine(el: LaybyElements, options: LaybyOptions): LaybyEngine | null {
   const canvas = document.createElement("canvas");
@@ -104,7 +97,6 @@ export function createLaybyEngine(el: LaybyElements, options: LaybyOptions): Lay
   // they are placed once.
   const signStyle = el.sign.style.cssText;
   const cameraStyle = el.camera.style.cssText;
-  const phoneStyle = el.phone.style.cssText;
   scene.updateMatrixWorld(true);
   const signMatrix = new THREE.Matrix4().multiplyMatrices(
     world.sign.group.matrixWorld,
@@ -118,9 +110,8 @@ export function createLaybyEngine(el: LaybyElements, options: LaybyOptions): Lay
     transform: objectCSS(signMatrix),
   });
   el.sign.setAttribute("data-modelled", "");
-  // The phone's link is a plain box over the phone, refitted every frame.
-  Object.assign(el.phone.style, { left: "0", top: "0", right: "auto", bottom: "auto", transform: "none", aspectRatio: "auto" });
-  el.phone.setAttribute("data-modelled", "");
+  // The phone's button is a plain box over the phone, refitted every frame.
+  const phone = createPhoneRig(world.phone, { element: el.phone, reducedMotion: options.reducedMotion });
 
   const eyeAt = EYE.clone();
   const aim = LOOK.clone();
@@ -148,34 +139,6 @@ export function createLaybyEngine(el: LaybyElements, options: LaybyOptions): Lay
   resizer.observe(el.container);
   resize();
 
-  // The corners of the phone housing, door shut, for fitting its link.
-  const phoneBox = new THREE.Box3().setFromObject(world.phone);
-  const phoneCorners = Array.from({ length: 8 }, (_, i) =>
-    new THREE.Vector3(
-      i & 1 ? phoneBox.max.x : phoneBox.min.x,
-      i & 2 ? phoneBox.max.y : phoneBox.min.y,
-      i & 4 ? phoneBox.max.z : phoneBox.min.z,
-    ),
-  );
-  const corner = new THREE.Vector3();
-  function fitPhone() {
-    let [left, top, right, bottom] = [Infinity, Infinity, -Infinity, -Infinity];
-    for (const point of phoneCorners) {
-      corner.copy(point).project(camera);
-      const x = ((corner.x + 1) / 2) * width;
-      const y = ((1 - corner.y) / 2) * height;
-      left = Math.min(left, x);
-      right = Math.max(right, x);
-      top = Math.min(top, y);
-      bottom = Math.max(bottom, y);
-    }
-    // A little slack round the box, so it is easy to hit.
-    const pad = 6;
-    el.phone.style.transform = `translate(${left - pad}px,${top - pad}px)`;
-    el.phone.style.width = `${right - left + 2 * pad}px`;
-    el.phone.style.height = `${bottom - top + 2 * pad}px`;
-  }
-
   const pointer = { x: 0, y: 0, smoothX: 0, smoothY: 0 };
   const onPointer = (event: PointerEvent) => {
     pointer.x = THREE.MathUtils.clamp((event.clientX / window.innerWidth) * 2 - 1, -1, 1);
@@ -186,10 +149,6 @@ export function createLaybyEngine(el: LaybyElements, options: LaybyOptions): Lay
   const motion = options.reducedMotion ? 0 : 1;
   let leaving: string | null = null;
   let hint: string | null = null;
-  let hovering = false;
-  let calledAt = -Infinity;
-  let used = false;
-  const phone = { open: 0, lift: 0, ring: 0 };
   const eye = new THREE.Vector3();
   const look = new THREE.Vector3();
   let shown = false;
@@ -216,25 +175,20 @@ export function createLaybyEngine(el: LaybyElements, options: LaybyOptions): Lay
     pointer.smoothY += (pointer.y - pointer.smoothY) * settle;
     // A slow handheld drift, leaning toward the pointer. Kept small: the
     // phone is close, so it swings across the screen more than the rest.
+    // Up close to the phone, only a trace of the drift is left.
+    const k = phone.step(time, dt);
+    const drift = motion * (1 - 0.85 * k);
     const handX = (Math.sin(time * 0.4) * 0.7 + Math.sin(time * 1.1 + 1.3) * 0.3) * 0.012;
     const handY = (Math.sin(time * 0.5 + 0.4) * 0.7 + Math.sin(time * 1.3) * 0.3) * 0.006;
     // Looking out along -x, the screen's right is -z.
-    eye.set(eyeAt.x, eyeAt.y + (-pointer.smoothY * 0.04 + handY) * motion, eyeAt.z - (pointer.smoothX * 0.12 + handX) * motion);
-    look.set(aim.x, aim.y - pointer.smoothY * 0.15 * motion, aim.z - pointer.smoothX * 0.6 * motion);
+    eye.set(eyeAt.x, eyeAt.y + (-pointer.smoothY * 0.04 + handY) * drift, eyeAt.z - (pointer.smoothX * 0.12 + handX) * drift);
+    look.set(aim.x, aim.y - pointer.smoothY * 0.15 * drift, aim.z - pointer.smoothX * 0.6 * drift);
+    phone.frame(eye, look, k, camera.fov);
     camera.position.copy(eye);
     camera.lookAt(look);
     camera.updateMatrixWorld();
 
-    // The phone: ajar while hovered, wide open with the handset off the
-    // hook for a while after a call, and otherwise ringing now and then
-    // until it has been touched.
-    const calling = time - calledAt < CALL_HOLD;
-    const ringing = !used && !hovering && motion > 0 && time % RING_EVERY < RING_FOR;
-    const instant = motion === 0 ? 1e3 : 1;
-    phone.open = approach(phone.open, calling ? 1 : hovering ? 0.22 : 0, (calling ? 5 : 7) * instant, dt);
-    phone.lift = approach(phone.lift, calling && phone.open > 0.7 ? 1 : 0, 6 * instant, dt);
-    phone.ring = approach(phone.ring, ringing ? 1 : 0, 18, dt);
-    world.update(time, phone);
+    world.update(time);
 
     world.sign.setHighlight(leaving ?? hint, !!leaving);
     world.sky.position.copy(camera.position);
@@ -243,7 +197,7 @@ export function createLaybyEngine(el: LaybyElements, options: LaybyOptions): Lay
       (height * renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
 
     grade.uTime.value = time;
-    grade.uBlur.value = 0;
+    grade.uBlur.value = phone.blur;
     grade.uAberration.value = 0.0015;
     grade.uVignette.value = 0.45;
     composer.render(dt);
@@ -251,7 +205,7 @@ export function createLaybyEngine(el: LaybyElements, options: LaybyOptions): Lay
     const focal = camera.projectionMatrix.elements[5] * (height / 2);
     el.camera.style.transform = `perspective(${focal}px) translateZ(${focal}px)${cameraCSS(camera.matrixWorldInverse)} translate(${width / 2}px,${height / 2}px)`;
     el.sign.style.pointerEvents = leaving ? "none" : "";
-    fitPhone();
+    phone.fit(camera, width, height, grade.uCenter.value);
 
     if (!shown) {
       shown = true;
@@ -269,14 +223,9 @@ export function createLaybyEngine(el: LaybyElements, options: LaybyOptions): Lay
     hint(href) {
       hint = href;
     },
-    hoverPhone(on) {
-      hovering = on;
-      if (on) used = true;
-    },
-    callPhone() {
-      used = true;
-      calledAt = performance.now() / 1000;
-    },
+    hoverPhone: phone.hover,
+    openDial: phone.openDial,
+    callPhone: phone.call,
     setDark,
     dispose() {
       cancelAnimationFrame(frame);
@@ -294,8 +243,7 @@ export function createLaybyEngine(el: LaybyElements, options: LaybyOptions): Lay
       canvas.remove();
       el.sign.style.cssText = signStyle;
       el.sign.removeAttribute("data-modelled");
-      el.phone.style.cssText = phoneStyle;
-      el.phone.removeAttribute("data-modelled");
+      phone.dispose();
       el.camera.style.cssText = cameraStyle;
     },
   };

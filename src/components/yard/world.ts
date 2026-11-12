@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { TEXTURE_URLS } from "@/lib/assets";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { createForest } from "../road/forest";
+import { createPhone } from "../road/phone";
 import { createGantrySign, directionArt, SW, type GantryPanel, type SignItem } from "../road/sign";
 import { canvasTexture, dustFragment, dustVertex, imageTexture, matte, radialTexture, rng, skyFragment, skyVertex } from "../road/world";
 import { day, dusk, type YardPalette } from "./palette";
@@ -30,6 +31,10 @@ const YARD = { left: -30, right: 30, front: 7, back: -42, gate: 3.5 };
 // two of the panels have worked loose on their clamps (radians, per panel
 // from the top; see also the wear in sign.ts).
 export const SIGNPOST = { maxX: 3.2, z: 7.3, scale: 0.45, clearance: 0.4 };
+// The emergency phone stands just left of the signpost, a step nearer, a
+// touch over life size so it holds its own in the shot. It has been leaning
+// since a digger clipped it.
+const PHONE = { gap: 0.45, forward: 0.2, scale: 1.25, lean: { back: 0.03, side: 0.06 } };
 const SIGNPOST_LEAN = { back: -0.025, side: -0.05 };
 const SIGNPOST_TILTS = [-0.02, 0, 0.035];
 // The grey-olive the sign green fades toward.
@@ -895,13 +900,27 @@ export function buildYard({
   }
   signpost.scale.setScalar(SIGNPOST.scale);
   scene.add(signpost);
+
+  // The emergency phone, beside it: battered, on the same rusty steel
+  // (see road/phone.ts).
+  const phone = createPhone({ post: rusty, worn: true });
+  phone.group.rotation.order = "YXZ";
+  phone.group.scale.setScalar(PHONE.scale);
+  scene.add(phone.group);
+
   // Stands the signpost x across (capped at SIGNPOST.maxX), facing the
-  // camera, leaning.
+  // camera, leaning, with the phone at its side. The phone turns a little
+  // further than square on, so it shows its side.
   function placeSignpost(x: number) {
     x = Math.min(x, SIGNPOST.maxX);
     signpost.position.set(x, 0, SIGNPOST.z);
     signpost.rotation.set(SIGNPOST_LEAN.back, Math.atan2(EYE.x - x, EYE.z - SIGNPOST.z), SIGNPOST_LEAN.side);
     signpost.updateMatrixWorld(true);
+    const px = x + layout.left * SIGNPOST.scale - PHONE.gap;
+    const pz = SIGNPOST.z + PHONE.forward;
+    phone.group.position.set(px, DIRT_Y, pz);
+    phone.group.rotation.set(PHONE.lean.back, Math.atan2(EYE.x - px, EYE.z - pz) + 0.35, PHONE.lean.side);
+    phone.group.updateMatrixWorld(true);
   }
   placeSignpost(SIGNPOST.maxX);
 
@@ -1212,5 +1231,6 @@ export function buildYard({
     sign: signs,
     signpost,
     placeSignpost,
+    phone,
   };
 }
