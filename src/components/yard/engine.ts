@@ -1,9 +1,9 @@
 import * as THREE from "three";
-import { disposeTree } from "../road/car";
 import { cameraCSS, objectCSS } from "../road/engine";
 import { createPhoneRig } from "../road/phone";
-import { createPost } from "../road/post";
 import { SW } from "../road/sign";
+import { GRADE } from "../scene/post";
+import { createStage } from "../scene/stage";
 import { day, dusk } from "./palette";
 import { buildYard, EYE, LOOK, SIGNPOST, type SignpostLayout } from "./world";
 
@@ -50,44 +50,15 @@ function fitFov(aspect: number) {
 }
 
 export function createYardEngine(el: YardElements, options: YardOptions): YardEngine | null {
-  // As on the road scene, the engine owns its canvas so it can release the
-  // GL context on dispose.
-  const canvas = document.createElement("canvas");
-  let renderer: THREE.WebGLRenderer;
-  try {
-    renderer = new THREE.WebGLRenderer({ canvas, powerPreference: "high-performance" });
-  } catch {
-    return null;
-  }
-  canvas.className = "absolute inset-0 h-full w-full opacity-0";
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFShadowMap;
-  el.stage.append(canvas);
-
-  const compact = el.container.clientWidth < 700;
   const layout = options.sign.layout;
-  const world = buildYard({
-    anisotropy: renderer.capabilities.getMaxAnisotropy(),
-    detail: compact ? 0.45 : 1,
-    signpost: layout,
-    font: options.sign.font,
+  const stage = createStage(el, {
+    build: ({ anisotropy, detail }) => buildYard({ anisotropy, detail, signpost: layout, font: options.sign.font }),
+    palettes: { day, dusk },
+    dark: options.dark,
+    fov: fitFov(16 / 9),
   });
-  const { scene } = world;
-  const camera = new THREE.PerspectiveCamera(fitFov(16 / 9), 1, 0.1, 3000);
-  const { composer, grade } = createPost(renderer, scene, camera);
-
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  let environment: THREE.WebGLRenderTarget | null = null;
-  function setDark(dark: boolean) {
-    const palette = dark ? dusk : day;
-    world.apply(palette);
-    renderer.toneMappingExposure = palette.exposure;
-    environment?.dispose();
-    environment = world.withDimSun(() => pmrem.fromScene(world.skyScene, 0.04, 0.1, 3000));
-    scene.environment = environment.texture;
-  }
-  setDark(options.dark);
+  if (!stage) return null;
+  const { world, camera, grade } = stage;
 
   // The signpost stands still in the yard; the scene draws it, and the HTML
   // sign is laid over it in 3D as the links, showing only their focus rings
@@ -116,14 +87,7 @@ export function createYardEngine(el: YardElements, options: YardOptions): YardEn
   let width = 1;
   let height = 1;
   function resize() {
-    width = Math.max(1, el.container.clientWidth);
-    height = Math.max(1, el.container.clientHeight);
-    const ratio = Math.min(window.devicePixelRatio, width < 700 ? 1.5 : 1.75);
-    renderer.setPixelRatio(ratio);
-    renderer.setSize(width, height, false);
-    composer.setPixelRatio(ratio);
-    composer.setSize(width, height);
-    camera.aspect = width / height;
+    ({ width, height } = stage!.resize());
     camera.fov = fitFov(camera.aspect);
     camera.updateProjectionMatrix();
     el.camera.style.width = `${width}px`;
@@ -146,10 +110,9 @@ export function createYardEngine(el: YardElements, options: YardOptions): YardEn
   let hint: number | null = null;
   const eye = new THREE.Vector3();
   const look = new THREE.Vector3();
-  let shown = false;
   // Hold the first frame until the trees and meadow are in place.
   let loaded = false;
-  void world.ready.then(() => {
+  void stage.ready.then(() => {
     loaded = true;
   });
   let last = performance.now();
@@ -164,7 +127,6 @@ export function createYardEngine(el: YardElements, options: YardOptions): YardEn
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     const time = now / 1000;
-    world.wind.value = time * motion;
 
     const settle = 1 - Math.exp(-dt * 2.5);
     pointer.smoothX += (pointer.x - pointer.smoothX) * settle;
@@ -186,27 +148,17 @@ export function createYardEngine(el: YardElements, options: YardOptions): YardEn
     world.sign.setHighlight(leaving ? leaving.lateral : hint, !!leaving);
 
     world.update(time, motion);
-    world.sky.position.copy(camera.position);
-    world.clouds.position.x = Math.sin(time * 0.006) * 25 * motion;
-    world.dust.uniforms.uScale.value =
-      (height * renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
 
-    grade.uTime.value = time;
     grade.uBlur.value = phone.blur;
-    grade.uAberration.value = 0.0015;
-    grade.uVignette.value = 0.45;
-    composer.render(dt);
+    grade.uVignette.value = GRADE.vignette;
+    const first = stage!.render(dt, time, motion);
 
     const focal = camera.projectionMatrix.elements[5] * (height / 2);
     el.camera.style.transform = `perspective(${focal}px) translateZ(${focal}px)${cameraCSS(camera.matrixWorldInverse)} translate(${width / 2}px,${height / 2}px)`;
     el.sign.style.pointerEvents = leaving ? "none" : "";
     phone.fit(camera, width, height, grade.uCenter.value);
 
-    if (!shown) {
-      shown = true;
-      canvas.style.opacity = "1";
-      options.onReady?.();
-    }
+    if (first) options.onReady?.();
   }
 
   return {
@@ -221,20 +173,12 @@ export function createYardEngine(el: YardElements, options: YardOptions): YardEn
     hoverPhone: phone.hover,
     openDial: phone.openDial,
     callPhone: phone.call,
-    setDark,
+    setDark: stage.setDark,
     dispose() {
       cancelAnimationFrame(frame);
       resizer.disconnect();
       window.removeEventListener("pointermove", onPointer);
-      world.forest.dispose();
-      disposeTree(scene);
-      environment?.dispose();
-      pmrem.dispose();
-      for (const pass of composer.passes) pass.dispose();
-      composer.dispose();
-      renderer.dispose();
-      renderer.forceContextLoss();
-      canvas.remove();
+      stage!.dispose();
       el.sign.style.cssText = signStyle;
       el.sign.removeAttribute("data-modelled");
       phone.dispose();

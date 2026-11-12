@@ -2,7 +2,7 @@
 // the middle. It covers the page whenever anything holds it, and lifts once
 // nothing does:
 //
-// - the first load holds it until every model, texture and font is in;
+// - the first load holds it until the sign font and every page's code are in;
 // - a page with a 3D scene holds it until the scene's first frame is drawn,
 //   so its sky gradient is never seen on its own;
 // - leaving a page through its signs holds it from the fade out until the

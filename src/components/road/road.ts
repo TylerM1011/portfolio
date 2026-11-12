@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { extendShader, foreground, ink, type Ink } from "../scene/style";
 
 // A British rural dual carriageway (A-road), built to UK dimensions at 0.44
 // world units per metre (the car is a true-scale Polo). Traffic keeps left:
@@ -41,7 +42,24 @@ export const ROAD = {
   // Gantry posts: on the nearside verge, and in the central reservation on
   // the far side of the barrier, so the gantry spans past the guard rail.
   gantryPosts: [NEAR_SHOULDER - 0.5, RESERVATION[1] - 0.25] as [number, number],
+  // The mown grass beside each carriageway and down the central
+  // reservation, as [left, right] in x, the length of the road.
+  verges: [
+    [LAYBY_BACK - 1.1, NEAR_SHOULDER],
+    [RESERVATION[0], RESERVATION[1]],
+    [ONCOMING_SHOULDER, ONCOMING_SHOULDER + 1.4],
+  ] as [number, number][],
+  length: [NEAR, FAR] as [number, number],
 };
+
+// How wild the grass grows at x: 0 on the mown verges and the central
+// reservation, rising to 1 a few metres out into the meadow.
+export function wildness(x: number) {
+  const [near, , far] = ROAD.verges;
+  if (x <= near[1]) return THREE.MathUtils.smoothstep(near[0] - x, -0.3, 3);
+  if (x >= far[0]) return THREE.MathUtils.smoothstep(x - far[1], -0.3, 3);
+  return 0;
+}
 
 // UK markings, in metres: edge lines are solid (broken 1 m / 1 m across a
 // lay-by), and lane lines are 2 m marks with 7 m gaps.
@@ -49,8 +67,11 @@ const EDGE_WIDTH = 0.15 * M;
 const LANE_LINE = { width: 0.1 * M, mark: 2 * M, gap: 7 * M };
 const STUD_SPACING = 18 * M;
 
-// The asphalt texture tiles every TILE units (about 2.3 m).
+// The asphalt's UVs are in world units (TILE to the unit), for weathering.
 const TILE = 1;
+// Warm dark grey, a touch lighter than real asphalt so the shade side of
+// things standing on it still reads against it.
+const ASPHALT = 0x5f5d5c;
 
 // Seeded random, so the road looks the same on every visit.
 function rng(seed: number) {
@@ -102,61 +123,6 @@ function dataTexture(data: Uint8Array, size: number, anisotropy: number, srgb: b
   return texture;
 }
 
-// Hot-rolled asphalt, about 2 mm per pixel: aggregate stones of mixed shades
-// set in dark binder, with matching relief (normal map) and roughness.
-function asphaltTextures(anisotropy: number) {
-  const size = 1024;
-  const rand = rng(21);
-  const height = valueNoise(size, [8, 32], rand).map((v) => v * 0.25);
-  const shade = new Float32Array(size * size).fill(0.27);
-  const rough = new Float32Array(size * size).fill(0.95);
-  const stones = 70000;
-  for (let s = 0; s < stones; s++) {
-    const cx = rand() * size;
-    const cy = rand() * size;
-    const r = 0.8 + rand() ** 2 * 2.6;
-    const tone = 0.24 + rand() ** 1.6 * 0.42;
-    const lift = 0.4 + rand() * 0.6;
-    const r2 = r * r;
-    for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++) {
-      for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
-        const d2 = (x - cx) ** 2 + (y - cy) ** 2;
-        if (d2 > r2) continue;
-        const i = ((y + size) % size) * size + ((x + size) % size);
-        const h = 0.25 + lift * Math.sqrt(1 - d2 / r2) * 0.75;
-        if (h <= height[i]) continue;
-        height[i] = h;
-        shade[i] = tone;
-        rough[i] = 0.7 + rand() * 0.15;
-      }
-    }
-  }
-  const albedo = new Uint8Array(size * size * 4);
-  const normal = new Uint8Array(size * size * 4);
-  const roughness = new Uint8Array(size * size * 4);
-  const n = new THREE.Vector3();
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const i = y * size + x;
-      const grit = (rand() - 0.5) * 0.04;
-      const v = Math.round(Math.min(1, shade[i] + grit) * 255);
-      // Aggregate in UK asphalt runs slightly warm.
-      albedo.set([v, Math.round(v * 0.99), Math.round(v * 0.97), 255], i * 4);
-      const dx = height[y * size + ((x + 1) % size)] - height[y * size + ((x - 1 + size) % size)];
-      const dy = height[((y + 1) % size) * size + x] - height[((y - 1 + size) % size) * size + x];
-      n.set(-dx * 2.5, -dy * 2.5, 1).normalize();
-      normal.set([(n.x * 0.5 + 0.5) * 255, (n.y * 0.5 + 0.5) * 255, (n.z * 0.5 + 0.5) * 255, 255], i * 4);
-      const g = Math.round(rough[i] * 255);
-      roughness.set([g, g, g, 255], i * 4);
-    }
-  }
-  return {
-    map: dataTexture(albedo, size, anisotropy, true),
-    normalMap: dataTexture(normal, size, anisotropy, false),
-    roughnessMap: dataTexture(roughness, size, anisotropy, false),
-  };
-}
-
 // Large-scale patchiness (repairs, weathering) so the tiling never reads.
 function patchTexture(anisotropy: number) {
   const size = 256;
@@ -171,8 +137,8 @@ function patchTexture(anisotropy: number) {
 
 // Varies the asphalt over tens of metres, and polishes the wheel paths of
 // each lane, which run along `axis` ("x" or "z") with centres `lanes`.
-function weather(material: THREE.MeshStandardMaterial, patches: THREE.Texture, axis: "x" | "z", lanes: number[]) {
-  material.onBeforeCompile = (shader) => {
+function weather(material: THREE.Material, patches: THREE.Texture, axis: "x" | "z", lanes: number[]) {
+  extendShader(material, `road-weather-${axis}-${lanes.join(",")}`, (shader) => {
     shader.uniforms.uPatches = { value: patches };
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec2 vRoadPlan;")
@@ -193,11 +159,10 @@ function weather(material: THREE.MeshStandardMaterial, patches: THREE.Texture, a
         float oil = 0.0;
         ${tracks}
         float patchy = texture2D(uPatches, vRoadPlan / 37.0).r * 0.6 + texture2D(uPatches, vRoadPlan / 9.0 + 0.31).r * 0.4;
-        diffuseColor.rgb *= (0.82 + 0.36 * patchy) * (1.0 + 0.07 * track) * (1.0 - 0.06 * oil);`,
+        diffuseColor.rgb *= (0.9 + 0.2 * patchy) * (1.0 + 0.08 * track) * (1.0 - 0.06 * oil);`,
       )
       .replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\nroughnessFactor *= 1.0 - 0.18 * track;");
-  };
-  material.customProgramCacheKey = () => `road-weather-${axis}-${lanes.join(",")}`;
+  });
 }
 
 // Flat geometry lying on the road at height y, with UVs in world units so
@@ -239,27 +204,28 @@ function dashes(line: { width: number; mark: number; gap: number }, along: "z" |
 
 export function createRoad({ anisotropy }: { anisotropy: number }) {
   const group = new THREE.Group();
-  const asphalt = asphaltTextures(anisotropy);
+  // The asphalt is one flat ink, varied only by broad weathering and the
+  // polished wheel paths (see weather): no aggregate, no relief.
   const patches = patchTexture(anisotropy);
   const surface = (axis: "x" | "z", lanes: number[]) => {
-    const material = new THREE.MeshStandardMaterial({
-      ...asphalt,
-      normalScale: new THREE.Vector2(0.9, 0.9),
+    const material = ink({
+      color: ASPHALT,
       polygonOffset: true,
       polygonOffsetFactor: 1,
       polygonOffsetUnits: 1,
     });
     weather(material, patches, axis, lanes);
-    return material;
+    return foreground(material, 0.14, 1.5, 9);
   };
-  // Paint takes on the asphalt's relief.
-  const paint = new THREE.MeshStandardMaterial({
-    color: 0xeeede6,
-    roughness: 0.62,
-    roughnessMap: asphalt.roughnessMap,
-    normalMap: asphalt.normalMap,
-    normalScale: new THREE.Vector2(0.5, 0.5),
-  });
+  const paint = ink({ color: 0xeeebe2 });
+  // The mown verges: a paler band of short grass along each carriageway,
+  // just under the asphalt (the meadow ground is a little lower still).
+  const verge = ink();
+  for (const [left, right] of ROAD.verges) {
+    const strip = new THREE.Mesh(onRoad(rect(left, NEAR, right, FAR), -0.012), verge);
+    strip.receiveShadow = true;
+    group.add(strip);
+  }
   // Wheel paths in both lanes each way, and in the lay-by.
   const mainSurface = surface("x", [
     ROAD.layby.x,
@@ -305,6 +271,28 @@ export function createRoad({ anisotropy }: { anisotropy: number }) {
 
   add(markings, paint, 0.004);
 
+  // Repairs: patches of newer, darker asphalt with crisp edges, in the
+  // lay-by and the lane beside it, and an oil stain where cars stop.
+  const repair = ink({ color: ASPHALT, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  repair.color.multiplyScalar(0.84);
+  const repairs: [number, number, number, number][] = [
+    [ROAD.layby.x + 0.2, -12.6, 0.8, 1.5],
+    [ROAD.layby.x - 0.1, -22.4, 0.7, 0.9],
+    [0.15, -15.6, 1.1, 0.7],
+    [0.35, -27, 0.6, 1.2],
+  ];
+  add(
+    repairs.map(([x, z, w, d]) => rect(x - w / 2, z + d / 2, x + w / 2, z - d / 2)),
+    repair,
+    0.002,
+  );
+  const stain = new THREE.Mesh(
+    onRoad(new THREE.CircleGeometry(1, 32).scale(0.22, 0.4, 1).translate(ROAD.layby.x, 18.3, 0), 0.0025),
+    ink({ color: 0x3e3c3d, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+  );
+  stain.receiveShadow = true;
+  group.add(stain);
+
   // A concrete kerb along the lay-by's back edge, following its tapers.
   const kerbLine = [
     ...new THREE.CubicBezierCurve(
@@ -335,7 +323,7 @@ export function createRoad({ anisotropy }: { anisotropy: number }) {
     piece.translate((a.x + b.x) / 2 - kerbWidth / 2, kerbHeight / 2 - 0.02, -(a.y + b.y) / 2);
     kerbPieces.push(piece);
   }
-  const kerb = new THREE.Mesh(mergeGeometries(kerbPieces), new THREE.MeshStandardMaterial({ color: 0xb9b6ad, roughness: 0.92 }));
+  const kerb = new THREE.Mesh(mergeGeometries(kerbPieces), ink({ color: 0xb9b6ad, roughness: 0.92 }));
   kerb.castShadow = kerb.receiveShadow = true;
   group.add(kerb);
 
@@ -354,7 +342,7 @@ export function createRoad({ anisotropy }: { anisotropy: number }) {
   ctx.fillText("P", 128, 140);
   const signFace = new THREE.CanvasTexture(signCanvas);
   signFace.colorSpace = THREE.SRGBColorSpace;
-  const signMetal = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, metalness: 0.6, roughness: 0.45 });
+  const signMetal = ink({ color: 0x9aa0a6, metalness: 0.6, roughness: 0.45 });
   const laybySign = new THREE.Group();
   const signPost = new THREE.Mesh(new THREE.CylinderGeometry(0.025 * M, 0.025 * M, 1.9 * M, 8).translate(0, 0.95 * M, 0), signMetal);
   const signPlate = new THREE.Mesh(new THREE.BoxGeometry(0.6 * M, 0.6 * M, 0.02), [
@@ -362,7 +350,7 @@ export function createRoad({ anisotropy }: { anisotropy: number }) {
     signMetal,
     signMetal,
     signMetal,
-    new THREE.MeshStandardMaterial({ map: signFace, roughness: 0.5 }),
+    ink({ map: signFace, roughness: 0.5 }),
     signMetal,
   ]);
   signPlate.position.set(0, 1.9 * M, 0.03);
@@ -379,9 +367,9 @@ export function createRoad({ anisotropy }: { anisotropy: number }) {
   const studMaterials = Object.fromEntries(
     Object.entries(studColours).map(([name, colour]) => [
       name,
-      new THREE.MeshStandardMaterial({ color: 0x222222, emissive: colour, emissiveIntensity: 0, roughness: 0.3 }),
+      ink({ color: 0x222222, emissive: colour, emissiveIntensity: 0, roughness: 0.3 }),
     ]),
-  ) as Record<keyof typeof studColours, THREE.MeshStandardMaterial>;
+  ) as Record<keyof typeof studColours, Ink>;
   const studRows: [number, keyof typeof studColours][] = [
     [NEAR_EDGE - EDGE_WIDTH - 0.08 * M, "red"],
     [NEAR_EDGE + LANE, "white"],
@@ -414,7 +402,7 @@ export function createRoad({ anisotropy }: { anisotropy: number }) {
 
   // Steel safety barrier down the central reservation: double-sided
   // corrugated beam on posts every 2 m.
-  const steel = new THREE.MeshStandardMaterial({ color: 0xb9bec4, metalness: 0.85, roughness: 0.38 });
+  const steel = ink({ color: 0xb9bec4, metalness: 0.85, roughness: 0.38 });
   const postCount = Math.floor((NEAR - FAR) / (2 * M));
   const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.1 * M, 0.75 * M, 0.1 * M).translate(0, 0.375 * M, 0), steel, postCount);
   for (let i = 0; i < postCount; i++) posts.setMatrixAt(i, matrix.makeTranslation(BARRIER_X, 0, NEAR - i * 2 * M));
@@ -442,7 +430,7 @@ export function createRoad({ anisotropy }: { anisotropy: number }) {
   const markerCount = Math.floor((NEAR - FAR) / (50 * M));
   const markerPosts = new THREE.InstancedMesh(
     new THREE.BoxGeometry(0.1 * M, 1 * M, 0.08 * M).translate(0, 0.5 * M, 0),
-    new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.55 }),
+    ink({ color: 0xf2f2ee, roughness: 0.55 }),
     markerCount,
   );
   const reflectors = new THREE.InstancedMesh(
@@ -468,6 +456,10 @@ export function createRoad({ anisotropy }: { anisotropy: number }) {
       if (x > RESERVATION[1] - margin && x < ONCOMING_SHOULDER + margin) return true;
       if (Math.abs(x - BARRIER_X) < 0.12 + margin) return true;
       return x < NEAR_SHOULDER + margin && x > LAYBY_BACK - kerbWidth - margin && z < LAYBY.entry + margin && z > LAYBY.exit - margin;
+    },
+    // The verges take the meadow's green, mown paler.
+    setMeadow(meadow: number) {
+      verge.color.set(meadow).multiplyScalar(1.12).lerp(new THREE.Color(0xd8cf8a), 0.12);
     },
     // Retroreflective studs glow when the light is low.
     setStuds(intensity: number) {

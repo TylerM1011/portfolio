@@ -5,56 +5,10 @@ export default async function Footer() {
 
   return (
     <FooterReveal>
-      <div className="mx-auto flex max-w-4xl justify-end px-6 py-6 text-sm text-foreground/60">
-        {/* Required by the 3D models' Creative Commons licenses and the sign
-            font's Open Government Licence. */}
+      <div className="mx-auto flex max-w-4xl justify-end px-6 py-5 text-sm opacity-80">
+        {/* Required by the sign font's Open Government Licence. The scenes
+            are built in code, with no third-party models. */}
         <span className="flex flex-col gap-1 text-xs sm:items-end">
-          <span>
-            Car:{" "}
-            <a
-              href="https://sketchfab.com/3d-models/2024-volkswagen-polo-170-tsi-ec0f4dfd1ca84a859725e4002e9cf120"
-              className="underline-offset-2 hover:underline"
-            >
-              “2024 Volkswagen Polo 170 TSI”
-            </a>{" "}
-            by{" "}
-            <a
-              href="https://sketchfab.com/ddiaz-design"
-              className="underline-offset-2 hover:underline"
-            >
-              Ddiaz Design
-            </a>
-            ,{" "}
-            <a
-              href="https://creativecommons.org/licenses/by-nc-sa/4.0/"
-              className="underline-offset-2 hover:underline"
-            >
-              CC BY-NC-SA 4.0
-            </a>
-          </span>
-          <span>
-            Trees and meadow:{" "}
-            <a
-              href="https://sketchfab.com/3d-models/pine-forest-at-sunset-bef89be6b189456095db79107045d726"
-              className="underline-offset-2 hover:underline"
-            >
-              “Pine Forest at Sunset”
-            </a>{" "}
-            by{" "}
-            <a
-              href="https://sketchfab.com/Jagobo"
-              className="underline-offset-2 hover:underline"
-            >
-              Jagobo
-            </a>
-            ,{" "}
-            <a
-              href="https://creativecommons.org/licenses/by/4.0/"
-              className="underline-offset-2 hover:underline"
-            >
-              CC BY 4.0
-            </a>
-          </span>
           <span>
             Sign lettering: Transport Medium, Crown Copyright,{" "}
             <a

@@ -22,7 +22,6 @@ export const day: YardPalette = {
   floodlights: 0,
   windows: 0,
   beacon: 3,
-  exposure: 1.02,
 };
 
 export const dusk: YardPalette = {
@@ -31,6 +30,6 @@ export const dusk: YardPalette = {
   sunAzimuth: -38,
   dirt: 0xb4a08a,
   floodlights: 2.4,
-  windows: 1.8,
+  windows: 1.1,
   beacon: 9,
 };

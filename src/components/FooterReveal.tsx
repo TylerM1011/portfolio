@@ -80,7 +80,9 @@ export default function FooterReveal({ children }: { children: ReactNode }) {
       data-shown={shown || undefined}
       // Tabbing into the links brings the footer up so focus stays visible.
       onFocus={() => setShown(true)}
-      className="fixed inset-x-0 bottom-0 z-40 translate-y-full border-t border-foreground/10 transition-transform duration-300 ease-out data-shown:translate-y-0 motion-reduce:transition-none"
+      // Its own tinted glass keeps it legible over any scene, so the scenes
+      // need no scrim and look the same whether it is up or not.
+      className="fixed inset-x-0 bottom-0 z-40 translate-y-full border-t border-white/10 bg-(--strip) text-(--strip-ink) backdrop-blur-md transition-transform duration-300 ease-out data-shown:translate-y-0 motion-reduce:transition-none"
     >
       {children}
     </footer>

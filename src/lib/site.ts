@@ -5,8 +5,7 @@ export const site = {
   // The emergency phone on the contact page dials these: 0 for the CV (the
   // file lives in public/), 1 for LinkedIn, 2 for GitHub.
   cv: "/cv.pdf",
-  // TODO: your LinkedIn profile's URL.
-  linkedin: "https://www.linkedin.com/in/",
+  linkedin: "https://www.linkedin.com/in/tyler-mcandrew",
   github: "https://github.com/TylerM1011",
   nav: [
     { href: "/", label: "Home" },

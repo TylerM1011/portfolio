@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { ink } from "../scene/style";
 import {
   board,
   BORDER,
@@ -11,7 +12,6 @@ import {
   SW,
   TILE,
   TILE_TO_BASELINE,
-  weather,
   type Art,
   type Fill,
 } from "../road/sign";
@@ -77,10 +77,10 @@ export function createRouteSign(
   texture.anisotropy = anisotropy;
   // Darkened: unlike the gantry's, this face takes the low sun head on,
   // which would bleach the green and bloom the border.
-  const face = new THREE.MeshStandardMaterial({ map: texture, color: 0x9a9a9a, emissiveMap: texture, emissive: 0xffffff, roughness: 0.55 });
-  const metal = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, metalness: 0.7, roughness: 0.45 });
+  const face = ink({ map: texture, color: 0x9a9a9a, emissiveMap: texture, emissive: 0xffffff, roughness: 0.55 });
+  const metal = ink({ color: 0x9aa0a6, metalness: 0.7, roughness: 0.45 });
   // The posts are painted a dark grey, worn at the feet.
-  const paint = new THREE.MeshStandardMaterial({ color: 0x4a4c4f, metalness: 0.4, roughness: 0.6 });
+  const paint = ink({ color: 0x4a4c4f, metalness: 0.4, roughness: 0.6 });
 
   const shape = outline(w, h, 2 * BORDER * SW);
   const faceGeometry = new THREE.ShapeGeometry(shape, 6);
@@ -142,7 +142,6 @@ export function createRouteSign(
       ctx.fillStyle = fills[fill];
       ctx.fillText(text, x, y);
     }
-    weather(ctx, art.width, art.height, 3);
     texture.needsUpdate = true;
   }
   draw();

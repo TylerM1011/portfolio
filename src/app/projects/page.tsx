@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 const projects: Project[] = [
   {
     name: "Fraudible",
-    description: "A project currently under construction.",
+    description: "A free audiobook app.",
     status: "Under construction",
     href: "https://github.com/TylerM1011/Fraudible",
     drawing: "library",
@@ -24,7 +24,7 @@ const projects: Project[] = [
   },
   {
     name: "fuck roll 20",
-    description: "A short description of the project.",
+    description: "A Dungeons & Dragons virtual tabletop.",
     status: "Collaborated",
     stamp: "green",
     href: "https://fuck-roll-20.winkwonk.workers.dev/",

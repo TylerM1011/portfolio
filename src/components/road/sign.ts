@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { ink } from "../scene/style";
 import { ROAD } from "./road";
 
 // The gantry's direction signs, designed to the Traffic Signs Manual,
@@ -224,151 +225,6 @@ export function directionArt(item: SignItem, size = { width: 0, height: 0 }): Ar
 // Texture pixels per sw.
 const PX = 40;
 
-// Seeded, so the weathering is the same on every visit and every redraw.
-function rng(seed: number) {
-  return () => {
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// Grime settled toward the bottom edge, and rain streaks running down from
-// the top.
-export function weather(ctx: CanvasRenderingContext2D, width: number, height: number, seed: number) {
-  const rand = rng(seed);
-  const grime = ctx.createLinearGradient(0, height * 0.55, 0, height);
-  grime.addColorStop(0, "rgb(60 50 35 / 0)");
-  grime.addColorStop(1, "rgb(60 50 35 / 0.16)");
-  ctx.fillStyle = grime;
-  ctx.fillRect(0, 0, width, height);
-  for (let i = 0; i < width / 4; i++) {
-    const x = rand() * width;
-    const w = 0.25 + rand() * 0.8;
-    const length = 3 + rand() ** 2 * 15;
-    const streak = ctx.createLinearGradient(0, 0, 0, length);
-    streak.addColorStop(0, `rgb(40 35 30 / ${0.05 + rand() * 0.08})`);
-    streak.addColorStop(1, "rgb(40 35 30 / 0)");
-    ctx.fillStyle = streak;
-    ctx.fillRect(x, 0, w, length);
-  }
-}
-
-// Years of neglect, for signs left out on a building site: sheeting
-// bleached by the sun, mud thrown up from the ground, flakes chipped and
-// peeled back to the aluminium (mostly at the edges), rust weeping from the
-// fixings, scratches, and lichen along the top. `wear` scales it all, 0 to 1.
-function wearDown(ctx: CanvasRenderingContext2D, width: number, height: number, seed: number, wear: number) {
-  const rand = rng(seed * 31 + 5);
-  const dot = (x: number, y: number, r: number, fill: string) => {
-    ctx.fillStyle = fill;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-  };
-
-  ctx.fillStyle = `rgb(232 226 204 / ${0.28 * wear})`;
-  ctx.fillRect(0, 0, width, height);
-
-  // Broad stains of dirt where water has sat on the face.
-  for (let i = 0; i < (width / 6) * wear; i++) {
-    const x = rand() * width;
-    const y = rand() * height;
-    const r = 1.5 + rand() * 4;
-    const stain = ctx.createRadialGradient(x, y, 0, x, y, r);
-    stain.addColorStop(0, `rgb(66 56 38 / ${0.12 + rand() * 0.16})`);
-    stain.addColorStop(1, "rgb(66 56 38 / 0)");
-    ctx.fillStyle = stain;
-    ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
-  }
-
-  const mud = ctx.createLinearGradient(0, height * 0.35, 0, height);
-  mud.addColorStop(0, "rgb(84 64 40 / 0)");
-  mud.addColorStop(1, `rgb(84 64 40 / ${0.55 * wear})`);
-  ctx.fillStyle = mud;
-  ctx.fillRect(0, 0, width, height);
-  for (let i = 0; i < width * 10 * wear; i++) {
-    dot(rand() * width, height - rand() ** 2 * height * 0.75, 0.08 + rand() * 0.35, `rgb(70 52 32 / ${0.15 + rand() * 0.3})`);
-  }
-
-  // Rust creeping in from the bottom edge.
-  for (let i = 0; i < (width / 3) * wear; i++) {
-    const x = rand() * width;
-    const r = 0.6 + rand() * 1.8;
-    const creep = ctx.createRadialGradient(x, height, 0, x, height, r * 1.6);
-    creep.addColorStop(0, `rgb(120 58 20 / ${0.45 + rand() * 0.3})`);
-    creep.addColorStop(1, "rgb(120 58 20 / 0)");
-    ctx.fillStyle = creep;
-    ctx.fillRect(x - r * 1.6, height - r * 1.6, r * 3.2, r * 1.6);
-  }
-
-  for (let i = 0; i < Math.round((width / 2.5) * wear); i++) {
-    let x = rand() * width;
-    let y = rand() * height;
-    if (rand() < 0.7) {
-      const side = Math.floor(rand() * 4);
-      if (side === 0) y = rand() * 1.5;
-      else if (side === 1) y = height - rand() * 1.5;
-      else if (side === 2) x = rand() * 1.5;
-      else x = width - rand() * 1.5;
-    }
-    const r = 0.5 + rand() ** 2 * 3.2;
-    const points = 7 + Math.floor(rand() * 5);
-    ctx.beginPath();
-    for (let k = 0; k < points; k++) {
-      const a = (k / points) * Math.PI * 2;
-      const reach = r * (0.45 + rand() * 0.75);
-      ctx.lineTo(x + Math.cos(a) * reach, y + Math.sin(a) * reach * 0.8);
-    }
-    ctx.closePath();
-    ctx.fillStyle = "#a9aca6";
-    ctx.fill();
-    ctx.strokeStyle = "rgb(60 58 52 / 0.45)";
-    ctx.lineWidth = 0.12;
-    ctx.stroke();
-  }
-
-  // The fixings sit where the rails cross the uprights behind (see
-  // createGantrySign).
-  for (const fx of [0.2, 0.8]) {
-    for (const fy of [0.25, 0.75]) {
-      const x = fx * width + (rand() - 0.5) * 0.6;
-      const y = fy * height;
-      const length = (5 + rand() * 9) * wear;
-      const streak = ctx.createLinearGradient(0, y, 0, y + length);
-      streak.addColorStop(0, `rgb(128 62 22 / ${0.85 * wear})`);
-      streak.addColorStop(0.4, `rgb(128 62 22 / ${0.45 * wear})`);
-      streak.addColorStop(1, "rgb(128 62 22 / 0)");
-      ctx.fillStyle = streak;
-      ctx.fillRect(x - 0.55, y, 1.1 + rand() * 0.6, length);
-      dot(x, y, 0.9, "rgb(140 72 30 / 0.7)");
-      dot(x, y, 0.4, "#5f574e");
-    }
-  }
-
-  ctx.lineCap = "round";
-  for (let i = 0; i < width * 0.6 * wear; i++) {
-    const x = rand() * width;
-    const y = rand() * height;
-    const a = rand() * Math.PI;
-    const length = 0.8 + rand() * 4;
-    ctx.strokeStyle = `rgb(235 235 225 / ${0.15 + rand() * 0.25})`;
-    ctx.lineWidth = 0.05 + rand() * 0.08;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + Math.cos(a) * length, y + Math.sin(a) * length);
-    ctx.stroke();
-  }
-
-  for (let i = 0; i < 6 * wear; i++) {
-    const x = rand() * width;
-    for (let k = 0; k < 4; k++) {
-      dot(x + (rand() - 0.5) * 1.6, rand() * 2.2, 0.2 + rand() * 0.6, `rgb(168 170 92 / ${0.2 + rand() * 0.2})`);
-    }
-  }
-}
-
 // A plate outline in world units, centred on the origin.
 export function outline(width: number, height: number, radius: number) {
   const shape = new THREE.Shape();
@@ -399,24 +255,22 @@ export type GantryPanel<T extends SignItem = SignItem> = {
 // a chamfered edge that catches the light, its printed face, stiffening
 // rails and uprights behind (the uprights clamp onto the truss), and a lamp
 // on top. Faces sit at `z`; `metal` dresses everything but the faces.
-// `wear` (0 to 1) runs the panels down well past ordinary weathering.
 export function createGantrySign(
   panels: readonly GantryPanel[],
-  { font, z, metal, anisotropy, lamps = true, wear = 0 }: {
+  { font, z, metal, anisotropy, lamps = true }: {
     font: string;
     z: number;
     metal: THREE.Material;
     anisotropy: number;
     // Gantry signs are lit from above; post-mounted ones go without.
     lamps?: boolean;
-    wear?: number;
   },
 ) {
   const group = new THREE.Group();
   let green = "#00703c";
   let highlight: { lateral: number | null; active: boolean } = { lateral: null, active: false };
 
-  const drawn = panels.map(({ item, art, left, right, top, tilt = 0 }, i) => {
+  const drawn = panels.map(({ item, art, left, right, top, tilt = 0 }) => {
     const w = right - left;
     const h = art.height * SW;
     // Everything below is placed relative to the panel's centre.
@@ -433,7 +287,7 @@ export function createGantrySign(
 
     // Retroreflective sheeting: lit by the scene, but also glowing a little
     // (faked) so it reads with the sun behind the gantry.
-    const material = new THREE.MeshStandardMaterial({
+    const material = ink({
       map: texture,
       emissiveMap: texture,
       emissive: 0xffffff,
@@ -498,7 +352,7 @@ export function createGantrySign(
       panel.add(lamp);
     }
 
-    return { item, art, canvas, texture, material, seed: 7 + i };
+    return { item, art, canvas, texture, material };
   });
 
   group.traverse((object) => {
@@ -508,7 +362,7 @@ export function createGantrySign(
 
   function draw() {
     const fills: Record<Fill, string> = { white: "#ffffff", green, blue: LAYBY_BLUE, yellow: ROUTE_YELLOW };
-    for (const { item, art, canvas, texture, seed } of drawn) {
+    for (const { item, art, canvas, texture } of drawn) {
       const ctx = canvas.getContext("2d")!;
       ctx.setTransform(PX, 0, 0, PX, 0, 0);
       // White to the very edge, so filtering never pulls in a dark fringe
@@ -531,8 +385,6 @@ export function createGantrySign(
         ctx.fillStyle = `rgb(255 255 255 / ${highlight.active ? 0.2 : 0.12})`;
         ctx.fill(new Path2D(art.field));
       }
-      weather(ctx, art.width, art.height, seed);
-      if (wear > 0) wearDown(ctx, art.width, art.height, seed, wear);
       texture.needsUpdate = true;
     }
   }

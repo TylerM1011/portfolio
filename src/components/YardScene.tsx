@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useLayoutEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { holdScreen } from "@/lib/loading";
 import { site } from "@/lib/site";
 import { PhoneButton, useEmergencyPhone } from "./EmergencyPhone";
 import { fadeToPage } from "./LoadingScreen";
 import PhoneDial from "./PhoneDial";
+import { stackSheets } from "./sheetStack";
 import { signFont } from "./road/font";
 import { LAYBY_BLUE, LEGEND_FONT_SIZE, ROUTE_YELLOW, SW } from "./road/sign";
 import { createYardEngine, type YardEngine } from "./yard/engine";
@@ -40,7 +41,7 @@ const fallbackSign = {
   width: `${signWidth}em`,
   height: `${signHeight}em`,
 };
-// Without WebGL, the SOS marker sign stands in for the phone, left of the
+// Without WebGL, a flat drawing of the phone stands in for it, left of the
 // signpost.
 const fallbackPhone = {
   left: "56%",
@@ -63,6 +64,8 @@ export default function YardScene() {
   const cameraRef = useRef<HTMLDivElement>(null);
   const signRef = useRef<HTMLDivElement>(null);
   const phone = useEmergencyPhone(engineRef);
+  // While the dial is up, the blueprint sheets gather into a pile behind it.
+  useEffect(() => stackSheets(phone.dial.open), [phone.dial.open]);
   const { ref: phoneRef, reset: resetPhone } = phone;
 
   // Next.js keeps this page alive (hidden) after navigating away, which runs
@@ -127,12 +130,9 @@ export default function YardScene() {
     <>
       <div
         ref={containerRef}
-        className="yard-scene pointer-events-none fixed inset-0 overflow-hidden bg-linear-to-b from-[#4f8fcf] via-[#f2dfbf] via-55% to-[#9a7652] dark:from-[#1c1f4d] dark:via-[#f08a5d] dark:to-[#4a3828]"
+        className="yard-scene pointer-events-none fixed inset-0 overflow-hidden bg-linear-to-b from-(--sky-top) via-(--sky-horizon) via-55% to-[#9a7652] dark:to-[#4a3828]"
       >
         <div ref={stageRef} aria-hidden className="absolute inset-0" />
-        {/* A scrim keeps the footer legible over the dirt. It stays put
-            whether the footer is up or not, so the page looks the same. */}
-        <div aria-hidden className="absolute inset-x-0 bottom-0 h-48 bg-linear-to-t from-background/75 to-transparent" />
 
         <div className="absolute inset-0 overflow-hidden">
           <div ref={cameraRef} className="absolute top-0 left-0 h-full w-full transform-3d">

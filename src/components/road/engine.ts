@@ -1,8 +1,8 @@
 import * as THREE from "three";
+import { GRADE } from "../scene/post";
+import { createStage } from "../scene/stage";
 import { day, dusk } from "./palette";
-import { createPost } from "./post";
 import { SW } from "./sign";
-import { disposeTree } from "./car";
 import { ROAD } from "./road";
 import { buildWorld, CAR_Z, type GantryLayout } from "./world";
 
@@ -115,58 +115,22 @@ function fitLens(aspect: number, sign: GantryLayout) {
 }
 
 export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEngine | null {
-  // The engine owns its canvas so it can release the GL context on dispose
-  // and start clean with a new one when the page is shown again.
-  const canvas = document.createElement("canvas");
-  let renderer: THREE.WebGLRenderer;
-  try {
-    renderer = new THREE.WebGLRenderer({ canvas, powerPreference: "high-performance" });
-  } catch {
-    return null;
-  }
-  // Shown at once with the first frame, under the loading screen.
-  canvas.className = "absolute inset-0 h-full w-full opacity-0";
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFShadowMap;
-  el.stage.append(canvas);
-
-  const compact = el.container.clientWidth < 700;
-  const world = buildWorld({
-    anisotropy: renderer.capabilities.getMaxAnisotropy(),
-    detail: compact ? 0.45 : 1,
-    gantry: options.sign.gantry,
-    font: options.sign.font,
-  });
   const sign = options.sign.gantry;
-  const { scene, car } = world;
-  const camera = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.1, 3000);
-  const { composer, grade } = createPost(renderer, scene, camera);
-
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  let environment: THREE.WebGLRenderTarget | null = null;
-  function setDark(dark: boolean) {
-    const palette = dark ? dusk : day;
-    world.apply(palette);
-    renderer.toneMappingExposure = palette.exposure;
-    environment?.dispose();
-    environment = world.withDimSun(() => pmrem.fromScene(world.skyScene, 0.04, 0.1, 3000));
-    scene.environment = environment.texture;
-  }
-  setDark(options.dark);
+  const stage = createStage(el, {
+    build: ({ anisotropy, detail }) => buildWorld({ anisotropy, detail, gantry: sign, font: options.sign.font }),
+    palettes: { day, dusk },
+    dark: options.dark,
+    fov: BASE_FOV,
+  });
+  if (!stage) return null;
+  const { world, camera, grade } = stage;
+  const { car } = world;
 
   let width = 1;
   let height = 1;
   let lens = fitLens(1, sign);
   function resize() {
-    width = Math.max(1, el.container.clientWidth);
-    height = Math.max(1, el.container.clientHeight);
-    const ratio = Math.min(window.devicePixelRatio, width < 700 ? 1.5 : 1.75);
-    renderer.setPixelRatio(ratio);
-    renderer.setSize(width, height, false);
-    composer.setPixelRatio(ratio);
-    composer.setSize(width, height);
-    camera.aspect = width / height;
+    ({ width, height } = stage!.resize());
     lens = fitLens(camera.aspect, sign);
     el.camera.style.width = `${width}px`;
     el.camera.style.height = `${height}px`;
@@ -219,11 +183,10 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
   const ahead = new THREE.Vector3();
   const focus = new THREE.Vector3();
   const vanishing = new THREE.Vector3();
-  let shown = false;
   // Hold the first frame (and so the intro) until the car, trees and
   // meadow textures are in place.
   let loaded = false;
-  void world.ready.then(() => {
+  void stage.ready.then(() => {
     loaded = true;
   });
   let last = performance.now();
@@ -244,7 +207,6 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
     last = now;
     const time = now / 1000;
     const motion = reduced ? 0 : 1;
-    world.wind.value = time * motion;
 
     const settle = 1 - Math.exp(-dt * 2.5);
     pointer.smoothX += (pointer.x - pointer.smoothX) * settle;
@@ -260,8 +222,7 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
     let fov = lens.fov;
     let roll = 0;
     let blur = 0;
-    let aberration = 0.0015;
-    let vignette = 0.5;
+    let vignette = GRADE.vignette;
     let fade = 0;
     let signOpacity = 1;
 
@@ -329,7 +290,6 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
       roll = -lateral * 0.015 * swerve;
       fov += 8 * speed;
       blur = 0.45 * speed;
-      aberration += 0.003 * speed;
       vignette += 0.25 * speed;
       fade = clamp01((t - 0.8) / 0.2);
       if (t >= 1 && !drive.arrived) {
@@ -353,25 +313,17 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
     car.blinkers[0].visible = blink && signal < 0;
     car.blinkers[1].visible = blink && signal > 0;
 
-    world.sky.position.copy(camera.position);
-    world.clouds.position.x = Math.sin(time * 0.006) * 25 * motion;
     // Keep the shadow map centered just ahead of the camera.
     focus.set(eye.x, 0, eye.z - 8);
-    world.sun.target.position.copy(focus);
-    world.sun.target.updateMatrixWorld();
-    world.sun.position.copy(focus).addScaledVector(world.sunDirection, 60);
-    world.dust.uniforms.uScale.value =
-      (height * renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+    world.atmosphere.aimSun(focus);
 
-    grade.uTime.value = time;
     grade.uBlur.value = blur;
-    grade.uAberration.value = aberration;
     grade.uVignette.value = vignette;
     if (blur > 0) {
       vanishing.project(camera);
       grade.uCenter.value.set(vanishing.x * 0.5 + 0.5, vanishing.y * 0.5 + 0.5);
     }
-    composer.render(dt);
+    const first = stage!.render(dt, time, motion);
 
     const focal = camera.projectionMatrix.elements[5] * (height / 2);
     el.camera.style.transform = `perspective(${focal}px) translateZ(${focal}px)${cameraCSS(camera.matrixWorldInverse)} translate(${width / 2}px,${height / 2}px)`;
@@ -379,11 +331,7 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
     el.sign.style.opacity = String(signOpacity);
     el.sign.style.pointerEvents = signOpacity === 1 && !drive ? "auto" : "none";
     el.fade.style.opacity = String(fade);
-    if (!shown) {
-      shown = true;
-      canvas.style.opacity = "1";
-      options.onReady?.();
-    }
+    if (first) options.onReady?.();
   }
 
   return {
@@ -396,22 +344,13 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
     hint(lateral) {
       hint = lateral;
     },
-    setDark,
+    setDark: stage.setDark,
     dispose() {
       cancelAnimationFrame(frame);
       resizer.disconnect();
       watcher.disconnect();
       window.removeEventListener("pointermove", onPointer);
-      car.dispose();
-      world.forest.dispose();
-      disposeTree(scene);
-      environment?.dispose();
-      pmrem.dispose();
-      for (const pass of composer.passes) pass.dispose();
-      composer.dispose();
-      renderer.dispose();
-      renderer.forceContextLoss();
-      canvas.remove();
+      stage!.dispose();
       el.sign.style.cssText = signStyle;
       el.sign.removeAttribute("data-modelled");
       el.camera.style.cssText = cameraStyle;

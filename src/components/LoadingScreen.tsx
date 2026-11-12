@@ -2,7 +2,6 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, type CSSProperties } from "react";
-import { preloadAssets } from "@/lib/assets";
 import { connectScreen, holdScreen } from "@/lib/loading";
 import { site } from "@/lib/site";
 import { signFont } from "./road/font";
@@ -28,7 +27,8 @@ const screenStyle: CSSProperties = {
   zIndex: 200,
   display: "grid",
   placeItems: "center",
-  background: "#000",
+  // The night ink of the palette (see globals.css), not pure black.
+  background: "#15162a",
 };
 
 let navigate: ((href: string, fadeMs: number) => void) | null = null;
@@ -45,8 +45,9 @@ export function fadeToPage(href: string, fadeMs = FADE_IN_MS) {
 
 // Mounted once in the root layout, so it stays on screen across route
 // changes. On the first load it fetches everything the site uses (every
-// page's code, the scenes' models and textures, the sign font) and stays up
-// until all of it is in, so moving between pages never waits on the network.
+// page's code and the sign font; the scenes are built in code, with nothing
+// else to download) and stays up until all of it is in, so moving between
+// pages never waits on the network.
 // See lib/loading.ts for what else holds it.
 export default function LoadingScreen() {
   const router = useRouter();
@@ -61,7 +62,6 @@ export default function LoadingScreen() {
     const release = holdScreen();
     for (const item of site.nav) router.prefetch(item.href);
     void Promise.all([
-      preloadAssets(),
       document.fonts.load(`1em ${signFont.style.fontFamily}`).catch(() => {}),
       document.fonts.ready,
     ]).then(release);

@@ -1,10 +1,13 @@
 import * as THREE from "three";
-import { TEXTURE_URLS } from "@/lib/assets";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { createForest } from "../road/forest";
 import { createPhone } from "../road/phone";
 import { createGantrySign, directionArt, SW, type GantryPanel, type SignItem } from "../road/sign";
-import { canvasTexture, dustFragment, dustVertex, imageTexture, matte, radialTexture, rng, skyFragment, skyVertex } from "../road/world";
+import { meadowGround } from "../road/world";
+import { createAtmosphere } from "../scene/atmosphere";
+import { foreground, ink } from "../scene/style";
+import { canvasTexture, groundTexture, matte, radialTexture, rng } from "../scene/util";
 import { day, dusk, type YardPalette } from "./palette";
 
 // World units match the road scene: 0.44 to the metre. x is lateral, y is
@@ -27,18 +30,12 @@ const YARD = { left: -30, right: 30, front: 7, back: -42, gate: 3.5 };
 // camera: out by the fence on wide screens, clear of the sheets, and drawn
 // in on narrow ones to stay in shot (see placeSignpost). Its panels are
 // drawn to the gantry's 250 mm x-height and scaled down to a site road's
-// 110 mm. It has seen better days: the post leans back and to the right and
-// two of the panels have worked loose on their clamps (radians, per panel
-// from the top; see also the wear in sign.ts).
+// 110 mm. It is drawn like every other sign on the site (see the gantry and
+// the lay-by): clean panels, square on, on plain posts.
 export const SIGNPOST = { maxX: 3.2, z: 7.3, scale: 0.45, clearance: 0.4 };
 // The emergency phone stands just left of the signpost, a step nearer, a
-// touch over life size so it holds its own in the shot. It has been leaning
-// since a digger clipped it.
-const PHONE = { gap: 0.45, forward: 0.2, scale: 1.25, lean: { back: 0.03, side: 0.06 } };
-const SIGNPOST_LEAN = { back: -0.025, side: -0.05 };
-const SIGNPOST_TILTS = [-0.02, 0, 0.035];
-// The grey-olive the sign green fades toward.
-const SIGN_FADE = new THREE.Color(0x8c9682);
+// touch over life size so it holds its own in the shot.
+const PHONE = { gap: 0.45, forward: 0.2, scale: 1.25 };
 // Faces stand this far in front of the posts, clear of the rails behind.
 const SIGNPOST_FACE = 0.17;
 
@@ -60,7 +57,6 @@ export function layoutSignpost<T extends SignItem>(items: readonly T[]) {
     left: -w / 2,
     right: w / 2,
     top: bottom + (items.length - i) * h + (items.length - 1 - i) * gap,
-    tilt: SIGNPOST_TILTS[i % SIGNPOST_TILTS.length],
   }));
   return {
     panels,
@@ -93,6 +89,15 @@ function span(geometry: THREE.BufferGeometry, a: THREE.Vector3, b: THREE.Vector3
 
 // A square bar, t thick, from a to b.
 const bar = (a: THREE.Vector3, b: THREE.Vector3, t: number) => span(new THREE.BoxGeometry(t, t, a.distanceTo(b)), a, b);
+
+// A round rod, r in radius, from a to b: hydraulic rams, rails, pipes.
+const rod = (a: THREE.Vector3, b: THREE.Vector3, r: number, sides = 12) =>
+  span(new THREE.CylinderGeometry(r, r, a.distanceTo(b), sides).rotateX(Math.PI / 2), a, b);
+
+// A box with softened edges (r, capped to fit), as everything built here
+// has: sharp-edged boxes read as placeholders next to everything else.
+const rounded = (w: number, h: number, d: number, r = 0.03) =>
+  new RoundedBoxGeometry(w, h, d, 2, Math.min(r, w / 2 - 1e-4, h / 2 - 1e-4, d / 2 - 1e-4));
 
 // A universal beam or column (an I section, about 350 mm deep), from a to b.
 const I_SECTION = (() => {
@@ -142,54 +147,6 @@ function add(
   return mesh;
 }
 
-// Draws at (x, y) and at its wrapped copies, so the texture tiles.
-function wrapped(size: number, x: number, y: number, r: number, draw: (x: number, y: number) => void) {
-  for (const dx of [-size, 0, size]) {
-    for (const dy of [-size, 0, size]) {
-      const px = x + dx;
-      const py = y + dy;
-      if (px + r < 0 || px - r > size || py + r < 0 || py - r > size) continue;
-      draw(px, py);
-    }
-  }
-}
-
-// Tileable ground: soft blotches of damp and dry earth, then grit.
-function groundTexture(rand: () => number, colors: { base: string; light: string; dark: string }, grit: number) {
-  const size = 512;
-  return canvasTexture(size, size, (ctx) => {
-    ctx.fillStyle = colors.base;
-    ctx.fillRect(0, 0, size, size);
-    for (let i = 0; i < 80; i++) {
-      const x = rand() * size;
-      const y = rand() * size;
-      const r = 30 + rand() * 100;
-      const color = rand() < 0.5 ? colors.light : colors.dark;
-      const alpha = 0.06 + rand() * 0.14;
-      wrapped(size, x, y, r, (px, py) => {
-        const gradient = ctx.createRadialGradient(px, py, 0, px, py, r);
-        gradient.addColorStop(0, `rgba(${color},${alpha})`);
-        gradient.addColorStop(1, `rgba(${color},0)`);
-        ctx.fillStyle = gradient;
-        ctx.fillRect(px - r, py - r, 2 * r, 2 * r);
-      });
-    }
-    for (let i = 0; i < grit; i++) {
-      const x = rand() * size;
-      const y = rand() * size;
-      const r = rand() < 0.9 ? 0.6 + rand() * 1.2 : 1.8 + rand() * 2.6;
-      const squash = 0.55 + rand() * 0.45;
-      const angle = rand() * Math.PI;
-      ctx.fillStyle = `rgba(${rand() < 0.55 ? colors.dark : colors.light},${0.25 + rand() * 0.45})`;
-      wrapped(size, x, y, r, (px, py) => {
-        ctx.beginPath();
-        ctx.ellipse(px, py, r, r * squash, angle, 0, Math.PI * 2);
-        ctx.fill();
-      });
-    }
-  });
-}
-
 // Where the topsoil was scraped back: solid in the middle, ragged at the edge.
 function patchMask(rand: () => number) {
   const texture = canvasTexture(256, 256, (ctx) => {
@@ -216,27 +173,27 @@ function patchMask(rand: () => number) {
 function trackTexture() {
   const texture = canvasTexture(128, 128, (ctx) => {
     for (const x of [6, 82]) {
-      ctx.fillStyle = "rgba(255,255,255,0.32)";
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
       ctx.fillRect(x, 0, 40, 128);
-      ctx.fillStyle = "rgba(255,255,255,0.55)";
-      for (let y = 0; y < 128; y += 16) ctx.fillRect(x + 2, y, 36, 6);
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      for (let y = 0; y < 128; y += 32) ctx.fillRect(x + 3, y, 34, 12);
     }
   });
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   return texture;
 }
 
-// Corrugated steel, for the shipping containers.
+// A shipping container's side, drawn boldly: a few broad ribs in two tones,
+// and darker rails top and bottom.
 function corrugatedTexture() {
   const texture = canvasTexture(256, 64, (ctx) => {
-    for (let x = 0; x < 256; x++) {
-      const v = 0.78 + 0.22 * Math.sin((x / 256) * Math.PI * 2 * 24);
-      ctx.fillStyle = `rgb(${255 * v},${255 * v},${255 * v})`;
-      ctx.fillRect(x, 0, 1, 64);
-    }
-    ctx.fillStyle = "rgba(0,0,0,0.25)";
-    ctx.fillRect(0, 0, 256, 3);
-    ctx.fillRect(0, 61, 256, 3);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, 256, 64);
+    ctx.fillStyle = "rgb(214 214 214)";
+    for (let x = 0; x < 256; x += 32) ctx.fillRect(x + 18, 0, 14, 64);
+    ctx.fillStyle = "rgb(170 170 170)";
+    ctx.fillRect(0, 0, 256, 5);
+    ctx.fillRect(0, 59, 256, 5);
   });
   return texture;
 }
@@ -255,25 +212,40 @@ function cabinTextures(kind: "side" | "end") {
         ]
       : [[150, 70, 60, 70]];
   const map = canvasTexture(w, h, (ctx) => {
-    ctx.fillStyle = "#eceae4";
+    ctx.fillStyle = "#e4dfd3";
     ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = "rgba(0,0,0,0.12)";
-    for (let x = 0; x < w; x += 64) ctx.fillRect(x, 0, 2, h);
-    ctx.fillStyle = "#2c5f9e";
+    ctx.fillStyle = "rgba(60,50,40,0.1)";
+    for (let x = 0; x < w; x += 64) ctx.fillRect(x, 0, 3, h);
+    ctx.fillStyle = "#33639c";
     ctx.fillRect(0, h - 36, w, 36);
     ctx.fillRect(0, 0, w, 10);
     for (const [x, y, gw, gh] of glass) {
-      ctx.fillStyle = "#3a3f44";
-      ctx.fillRect(x - 5, y - 5, gw + 10, gh + 10);
-      ctx.fillStyle = "#26343f";
+      // White uPVC frames with a sill, and glass that shows the sky.
+      ctx.fillStyle = "#f4f2ec";
+      ctx.fillRect(x - 7, y - 7, gw + 14, gh + 14);
+      ctx.fillStyle = "#c9c4b8";
+      ctx.fillRect(x - 10, y + gh + 7, gw + 20, 5);
+      const sky = ctx.createLinearGradient(0, y, 0, y + gh);
+      sky.addColorStop(0, "#7d93a6");
+      sky.addColorStop(1, "#4d5f6e");
+      ctx.fillStyle = sky;
       ctx.fillRect(x, y, gw, gh);
-      ctx.fillStyle = "rgba(255,255,255,0.18)";
-      ctx.fillRect(x, y, gw * 0.4, gh);
+      ctx.fillStyle = "rgba(255,255,255,0.16)";
+      ctx.beginPath();
+      ctx.moveTo(x, y + gh * 0.7);
+      ctx.lineTo(x + gw * 0.55, y);
+      ctx.lineTo(x + gw * 0.8, y);
+      ctx.lineTo(x, y + gh);
+      ctx.fill();
+      ctx.fillStyle = "#f4f2ec";
+      ctx.fillRect(x + gw / 2 - 2, y, 4, gh);
     }
     if (kind === "end") {
-      ctx.fillStyle = "#56606a";
+      ctx.fillStyle = "#3f6c9e";
       ctx.fillRect(40, 60, 80, 160);
-      ctx.fillStyle = "#c9c9c9";
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      ctx.fillRect(48, 68, 64, 70);
+      ctx.fillStyle = "#d8d8d2";
       ctx.fillRect(104, 140, 8, 14);
     }
   });
@@ -287,30 +259,18 @@ function cabinTextures(kind: "side" | "end") {
 }
 
 function brickTexture() {
-  return canvasTexture(128, 128, (ctx) => {
-    ctx.fillStyle = "#d8d0c4";
-    ctx.fillRect(0, 0, 128, 128);
-    for (let row = 0; row < 8; row++) {
-      for (let col = -1; col < 4; col++) {
-        const x = col * 36 + (row % 2) * 18 + 2;
-        const shade = 150 + ((row * 7 + col * 13) % 5) * 9;
-        ctx.fillStyle = `rgb(${shade},${shade * 0.48},${shade * 0.36})`;
-        ctx.fillRect(x, row * 16 + 2, 33, 13);
+  // Three bold courses a side: a pallet of bricks, read from a distance.
+  return canvasTexture(64, 64, (ctx) => {
+    ctx.fillStyle = "#d7cbb9";
+    ctx.fillRect(0, 0, 64, 64);
+    ctx.fillStyle = "#b0603f";
+    for (let row = 0; row < 3; row++) {
+      for (let col = -1; col < 2; col++) {
+        const x = col * 32 + (row % 2) * 16 + 2;
+        ctx.fillRect(x, row * 21 + 2, 28, 17);
       }
     }
   });
-}
-
-// The heras fence's welded mesh: one cell, repeated.
-function meshTexture() {
-  const texture = canvasTexture(16, 16, (ctx) => {
-    ctx.clearRect(0, 0, 16, 16);
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, 16, 2);
-    ctx.fillRect(0, 0, 2, 16);
-  });
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  return texture;
 }
 
 // A ribbon of ground decal following a smooth path, v measured in widths.
@@ -373,27 +333,26 @@ function heap(radius: number, height: number, seed: number) {
 
 type Materials = ReturnType<typeof createMaterials>;
 
-function createMaterials(anisotropy: number, rand: () => number, meadowMap: THREE.Texture) {
-  const dirtMap = groundTexture(rand, { base: "#8e6c4b", light: "196,162,120", dark: "66,46,30" }, 9000);
+function createMaterials(anisotropy: number, rand: () => number) {
+  // Painted, not photographed (see scene/style.ts): broad swathes of earth
+  // and hardcore with no grit.
+  const dirtMap = groundTexture(rand, { base: "#8e6c4b", light: "168,132,96", dark: "116,86,58" }, 0);
   dirtMap.wrapS = dirtMap.wrapT = THREE.RepeatWrapping;
   dirtMap.anisotropy = anisotropy;
-  const gravelMap = groundTexture(rand, { base: "#9a958c", light: "220,214,204", dark: "70,68,64" }, 14000);
+  const gravelMap = groundTexture(rand, { base: "#9a958c", light: "186,180,170", dark: "128,122,114" }, 0);
   gravelMap.wrapS = gravelMap.wrapT = THREE.RepeatWrapping;
-  const fenceMap = meshTexture();
-  fenceMap.repeat.set(35, 22);
-  fenceMap.anisotropy = anisotropy;
   const side = cabinTextures("side");
   const end = cabinTextures("end");
   const cabinWall = (t: typeof side) =>
-    new THREE.MeshStandardMaterial({ map: t.map, emissiveMap: t.emissive, emissive: 0xffd9a0, emissiveIntensity: 0, roughness: 0.7 });
+    ink({ map: t.map, emissiveMap: t.emissive, emissive: 0xffd9a0, emissiveIntensity: 0, roughness: 0.7 });
   const cabinSide = cabinWall(side);
   const cabinEnd = cabinWall(end);
-  const cabinRoof = matte({ color: 0x8e9196 });
+  const cabinRoof = matte({ color: 0x9a9c9e });
   const corrugated = corrugatedTexture();
 
-  return {
-    meadow: matte({ map: meadowMap }),
-    dirt: matte({ map: dirtMap, alphaMap: patchMask(rand), transparent: true }),
+  const mats = {
+    meadow: meadowGround(anisotropy),
+    dirt: foreground(matte({ map: dirtMap, alphaMap: patchMask(rand), transparent: true }), 0.16, 3, 16),
     // Its own copy, so the heaps' planar uvs tile at ground scale.
     heap: matte({ map: dirtMap.clone() }),
     gravel: matte({ map: gravelMap }),
@@ -406,37 +365,29 @@ function createMaterials(anisotropy: number, rand: () => number, meadowMap: THRE
       polygonOffsetUnits: -2,
     }),
     // Construction-plant yellow.
-    crane: new THREE.MeshStandardMaterial({ color: 0xf0b000, roughness: 0.5, metalness: 0.3 }),
-    machine: new THREE.MeshStandardMaterial({ color: 0xee9a12, roughness: 0.45, metalness: 0.25 }),
+    crane: ink({ color: 0xf0b000, roughness: 0.5, metalness: 0.3 }),
+    machine: ink({ color: 0xee9a12, roughness: 0.45, metalness: 0.25 }),
     // Red oxide primer on the new steelwork.
-    steel: new THREE.MeshStandardMaterial({ color: 0x8a3e2c, roughness: 0.7, metalness: 0.35 }),
-    galvanised: new THREE.MeshStandardMaterial({ color: 0xb6bdc4, roughness: 0.42, metalness: 0.8 }),
+    steel: ink({ color: 0x8a3e2c, roughness: 0.7, metalness: 0.35 }),
+    galvanised: ink({ color: 0xb6bdc4, roughness: 0.42, metalness: 0.8 }),
     rubber: matte({ color: 0x28282a, roughness: 0.85 }),
     concrete: matte({ color: 0xbab5ab }),
     pipes: matte({ color: 0xb3ada2, side: THREE.DoubleSide }),
-    glass: new THREE.MeshStandardMaterial({ color: 0x1b2730, roughness: 0.06, metalness: 0.9 }),
+    // Tinted glass that shows the sky (as on the car), not a black mirror.
+    glass: ink({ color: 0x40525f, roughness: 0.45, metalness: 0.1 }),
+    undercarriage: matte({ color: 0x2c2b2a, roughness: 0.8 }),
     wood: matte({ color: 0xa57b4d }),
     bricks: matte({ map: brickTexture() }),
-    safety: new THREE.MeshStandardMaterial({ color: 0xf2c400, roughness: 0.6 }),
-    fence: new THREE.MeshStandardMaterial({
-      map: fenceMap,
-      alphaTest: 0.5,
-      alphaToCoverage: true,
-      side: THREE.DoubleSide,
-      color: 0xc7ccd0,
-      metalness: 0.6,
-      roughness: 0.45,
-    }),
-    lamp: new THREE.MeshStandardMaterial({ color: 0x30302e, emissive: 0xfff0d2, emissiveIntensity: 0 }),
-    cones: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55 }),
-    barrier: new THREE.MeshStandardMaterial({ roughness: 0.5 }),
+    safety: ink({ color: 0xf2c400, roughness: 0.6 }),
+    lamp: ink({ color: 0x30302e, emissive: 0xfff0d2, emissiveIntensity: 0 }),
+    cones: ink({ vertexColors: true, roughness: 0.55 }),
+    barrier: ink({ roughness: 0.5 }),
     cabin: [cabinEnd, cabinEnd, cabinRoof, cabinRoof, cabinSide, cabinSide],
     cabinWalls: [cabinSide, cabinEnd],
     containerRed: matte({ map: corrugated, color: 0x9a4430, roughness: 0.75 }),
     containerBlue: matte({ map: corrugated, color: 0x2f5d8c, roughness: 0.75 }),
-    hillFar: matte({ flatShading: true }),
-    hillNear: matte({ flatShading: true }),
   };
+  return mats;
 }
 
 function glowMaterial(color: number) {
@@ -465,11 +416,13 @@ function createCrane(mats: Materials) {
     [h, h],
     [-h, h],
   ] as const;
-  add(group, new THREE.BoxGeometry(2.4, BASE, 2.4), mats.concrete, 0, BASE / 2, 0);
+  add(group, rounded(2.4, BASE, 2.4, 0.08), mats.concrete, 0, BASE / 2, 0);
 
+  // Drawn boldly, as a print would: few, thick members, so the lattice
+  // reads as a pattern of triangles rather than a haze of fine lines.
   const mast: THREE.BufferGeometry[] = [];
-  for (const [x, z] of corners) mast.push(bar(v(x, BASE, z), v(x, BASE + MAST, z), 0.08));
-  const bays = Math.round(MAST / (2 * h));
+  for (const [x, z] of corners) mast.push(bar(v(x, BASE, z), v(x, BASE + MAST, z), 0.1));
+  const bays = Math.round(MAST / (4 * h));
   const bay = MAST / bays;
   for (let i = 0; i < bays; i++) {
     const y0 = BASE + i * bay;
@@ -477,8 +430,8 @@ function createCrane(mats: Materials) {
     corners.forEach(([ax, az], f) => {
       const [bx, bz] = corners[(f + 1) % 4];
       const up = (i + f) % 2 === 0;
-      mast.push(bar(v(ax, up ? y0 : y1, az), v(bx, up ? y1 : y0, bz), 0.035));
-      mast.push(bar(v(ax, y1, az), v(bx, y1, bz), 0.035));
+      mast.push(bar(v(ax, up ? y0 : y1, az), v(bx, up ? y1 : y0, bz), 0.055));
+      mast.push(bar(v(ax, y1, az), v(bx, y1, bz), 0.055));
     });
   }
   add(group, merged(mast), mats.crane);
@@ -499,27 +452,27 @@ function createCrane(mats: Materials) {
     steel.push(bar(v(x * 0.7, 2.2, z * 0.7), v(nx * 0.7, 2.2, nz * 0.7), 0.04));
   });
   // Jib: two bottom chords and a top chord, laced into a triangle.
-  for (const z of [-JW, JW]) steel.push(bar(v(0.6, J, z), v(JIB, J, z), 0.06));
-  const panels = Math.round(JIB - 0.6);
+  for (const z of [-JW, JW]) steel.push(bar(v(0.6, J, z), v(JIB, J, z), 0.08));
+  const panels = Math.round((JIB - 0.6) / 1.8);
   const panel = (JIB - 0.6) / panels;
-  steel.push(bar(v(0.6 + panel / 2, J + JH, 0), v(JIB - panel / 2, J + JH, 0), 0.06));
+  steel.push(bar(v(0.6 + panel / 2, J + JH, 0), v(JIB - panel / 2, J + JH, 0), 0.08));
   for (let i = 0; i < panels; i++) {
     const x0 = 0.6 + i * panel;
     const x1 = x0 + panel;
     const xm = (x0 + x1) / 2;
     for (const z of [-JW, JW]) {
-      steel.push(bar(v(x0, J, z), v(xm, J + JH, 0), 0.03));
-      steel.push(bar(v(xm, J + JH, 0), v(x1, J, z), 0.03));
+      steel.push(bar(v(x0, J, z), v(xm, J + JH, 0), 0.05));
+      steel.push(bar(v(xm, J + JH, 0), v(x1, J, z), 0.05));
     }
-    steel.push(bar(v(x1, J, -JW), v(x1, J, JW), 0.03));
+    steel.push(bar(v(x1, J, -JW), v(x1, J, JW), 0.05));
   }
   // Counter-jib: a railed walkway out to the counterweights.
   for (const z of [-0.5, 0.5]) {
     steel.push(bar(v(-0.6, J, z), v(-COUNTER, J, z), 0.08));
     steel.push(bar(v(-0.6, J + 0.55, z), v(-COUNTER, J + 0.55, z), 0.03));
-    for (let x = -1; x > -COUNTER; x -= 1) steel.push(bar(v(x, J, z), v(x, J + 0.55, z), 0.03));
+    for (let x = -2; x > -COUNTER; x -= 2) steel.push(bar(v(x, J, z), v(x, J + 0.55, z), 0.045));
   }
-  for (let x = -1; x >= -COUNTER; x -= 1) steel.push(bar(v(x, J, -0.5), v(x, J, 0.5), 0.04));
+  for (let x = -2; x >= -COUNTER; x -= 2) steel.push(bar(v(x, J, -0.5), v(x, J, 0.5), 0.05));
   // Pendant ties from the tower head.
   steel.push(bar(v(0, APEX, 0), v(JIB * 0.45, J + JH, 0), 0.03));
   steel.push(bar(v(0, APEX, 0), v(JIB * 0.85, J + JH, 0), 0.03));
@@ -527,16 +480,18 @@ function createCrane(mats: Materials) {
   add(top, merged(steel), mats.crane);
 
   add(top, new THREE.BoxGeometry(COUNTER - 0.6, 0.04, 1.0), mats.galvanised, -(COUNTER + 0.6) / 2, J + 0.02, 0);
-  for (let i = 0; i < 4; i++) add(top, new THREE.BoxGeometry(0.28, 1.5, 1.1), mats.concrete, -COUNTER + 0.35 + i * 0.3, J - 0.35, 0);
-  add(top, new THREE.BoxGeometry(1.3, 0.6, 0.8), mats.galvanised, -COUNTER + 2.7, J + 0.34, 0);
-  // Operator's cab, hung off the slewing platform.
-  add(top, new THREE.BoxGeometry(0.6, 0.65, 0.7), mats.crane, 0.4, 0.15, 1.0);
-  add(top, new THREE.BoxGeometry(0.05, 0.42, 0.6), mats.glass, 0.72, 0.22, 1.0);
+  for (let i = 0; i < 4; i++) add(top, rounded(0.28, 1.5, 1.1, 0.05), mats.concrete, -COUNTER + 0.35 + i * 0.3, J - 0.35, 0);
+  add(top, rounded(1.3, 0.6, 0.8, 0.08), mats.galvanised, -COUNTER + 2.7, J + 0.34, 0);
+  // Operator's cab, hung off the slewing platform, glazed on three sides.
+  add(top, rounded(0.6, 0.65, 0.7, 0.07), mats.crane, 0.4, 0.15, 1.0);
+  add(top, rounded(0.08, 0.42, 0.6, 0.03), mats.glass, 0.68, 0.22, 1.0);
+  add(top, rounded(0.5, 0.36, 0.04, 0.015), mats.glass, 0.4, 0.24, 1.34);
+  add(top, new THREE.CylinderGeometry(0.6, 0.6, 0.3, 32), mats.galvanised, 0, 0.15, 0);
 
   const trolley = new THREE.Group();
   trolley.position.set(13, J, 0);
   top.add(trolley);
-  add(trolley, new THREE.BoxGeometry(0.55, 0.18, 0.9), mats.galvanised, 0, -0.1, 0);
+  add(trolley, rounded(0.55, 0.18, 0.9, 0.04), mats.galvanised, 0, -0.1, 0);
   const pendulum = new THREE.Group();
   pendulum.position.y = -0.2;
   trolley.add(pendulum);
@@ -547,7 +502,7 @@ function createCrane(mats: Materials) {
   );
   const hook = new THREE.Group();
   pendulum.add(hook);
-  add(hook, new THREE.BoxGeometry(0.28, 0.32, 0.2), mats.crane, 0, -0.16, 0);
+  add(hook, rounded(0.28, 0.32, 0.2, 0.05), mats.crane, 0, -0.16, 0);
   add(
     hook,
     merged([bar(v(0, -0.32, 0), v(-1.2, -0.82, 0), 0.015), bar(v(0, -0.32, 0), v(1.2, -0.82, 0), 0.015)]),
@@ -611,7 +566,7 @@ function createFrame(mats: Materials) {
 
   for (let ix = 0; ix < NX; ix++) {
     for (let iz = 0; iz < NZ; iz++) {
-      pads.push(new THREE.BoxGeometry(0.5, 0.12, 0.5).translate(ix * SPAN, 0.06, -iz * SPAN));
+      pads.push(rounded(0.5, 0.12, 0.5, 0.03).translate(ix * SPAN, 0.06, -iz * SPAN));
       for (let level = 1; level <= LEVELS; level++) {
         if (has(ix, level)) members.push(member(at(ix, iz, (level - 1) * STOREY), at(ix, iz, level * STOREY)));
       }
@@ -640,7 +595,7 @@ function createFrame(mats: Materials) {
     const x1 = bays * SPAN + 0.15;
     const z0 = 0.15;
     const z1 = -(NZ - 1) * SPAN - 0.15;
-    slabs.push(new THREE.BoxGeometry(x1 - x0, 0.1, z0 - z1).translate((x0 + x1) / 2, y + 0.05, (z0 + z1) / 2));
+    slabs.push(rounded(x1 - x0, 0.1, z0 - z1, 0.03).translate((x0 + x1) / 2, y + 0.05, (z0 + z1) / 2));
     const r = y + 0.1;
     const edges = [
       [v(x0, r, z0), v(x1, r, z0)],
@@ -669,94 +624,218 @@ function createFrame(mats: Materials) {
   return group;
 }
 
-// A 20-tonne tracked excavator, its arm reaching into the spoil heap.
+// A side-on outline swept along x: a shape drawn in (z, y), extruded `width`
+// across and centred on x, with softened edges.
+function profile(shape: THREE.Shape, width: number, bevel = 0.015) {
+  return new THREE.ExtrudeGeometry(shape, {
+    depth: width - 2 * bevel,
+    bevelEnabled: true,
+    bevelSize: bevel,
+    bevelThickness: bevel,
+    bevelSegments: 2,
+    curveSegments: 10,
+  })
+    .translate(0, 0, -(width - 2 * bevel) / 2)
+    .rotateY(-Math.PI / 2);
+}
+
+// A tapering arm along a smooth path (in z, y), `from` thick at its root and
+// `to` at its tip, with rounded ends: the boom and the stick. `side(t, d)`
+// is the point d out from its edge at t along it (d < 0 for the other edge),
+// where the rams take hold.
+function arm(points: THREE.Vector2[], from: number, to: number) {
+  const curve = new THREE.SplineCurve(points);
+  const steps = 24;
+  const left: THREE.Vector2[] = [];
+  const right: THREE.Vector2[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const p = curve.getPoint(t);
+    const tangent = curve.getTangent(t);
+    const half = THREE.MathUtils.lerp(from, to, t) / 2;
+    const n = new THREE.Vector2(-tangent.y, tangent.x).multiplyScalar(half);
+    left.push(p.clone().add(n));
+    right.push(p.clone().sub(n));
+  }
+  const shape = new THREE.Shape(left);
+  const tip = curve.getPoint(1);
+  const end = Math.atan2(left[steps].y - tip.y, left[steps].x - tip.x);
+  shape.absarc(tip.x, tip.y, to / 2, end, end - Math.PI, true);
+  for (const p of right.reverse()) shape.lineTo(p.x, p.y);
+  const root = curve.getPoint(0);
+  const start = Math.atan2(right[steps].y - root.y, right[steps].x - root.x);
+  shape.absarc(root.x, root.y, from / 2, start, start - Math.PI, true);
+  const side = (t: number, d: number) => {
+    const tangent = curve.getTangent(t);
+    const half = THREE.MathUtils.lerp(from, to, t) / 2;
+    return curve.getPoint(t).add(new THREE.Vector2(-tangent.y, tangent.x).multiplyScalar(Math.sign(d) * half + d));
+  };
+  return { shape, side };
+}
+
+// A 20-tonne tracked excavator, its arm reaching into the spoil heap. Built
+// to read as the yard's hero machine beside the loaded car and trees: a
+// curved boom, track frames with their pads, a framed glass cab.
 function createExcavator(mats: Materials, slew: number) {
   const group = new THREE.Group();
-  for (const s of [-1, 1]) {
-    add(group, new THREE.BoxGeometry(0.27, 0.32, 1.7), mats.rubber, s * 0.42, 0.16, 0);
-    for (const z of [-0.85, 0.85]) {
-      add(group, new THREE.CylinderGeometry(0.16, 0.16, 0.27, 16).rotateZ(Math.PI / 2), mats.rubber, s * 0.42, 0.16, z);
+
+  // Tracks: a stadium-shaped frame each side, wrapped in grouser pads.
+  const TRACK = { length: 1.76, height: 0.34, width: 0.28, x: 0.42 };
+  const r = TRACK.height / 2;
+  const straight = TRACK.length / 2 - r;
+  const frame = new THREE.Shape()
+    .moveTo(-straight, -r)
+    .lineTo(straight, -r)
+    .absarc(straight, 0, r, -Math.PI / 2, Math.PI / 2, false)
+    .lineTo(-straight, r)
+    .absarc(-straight, 0, r, Math.PI / 2, (3 * Math.PI) / 2, false);
+  const pads: THREE.BufferGeometry[] = [];
+  const perimeter = 4 * straight + 2 * Math.PI * r;
+  const count = Math.round(perimeter / 0.075);
+  for (let i = 0; i < count; i++) {
+    let d = (i / count) * perimeter;
+    let z: number, y: number, angle: number;
+    if (d < 2 * straight) {
+      [z, y, angle] = [-straight + d, -r, 0];
+    } else if ((d -= 2 * straight) < Math.PI * r) {
+      angle = d / r;
+      [z, y] = [straight + Math.sin(angle) * r, -Math.cos(angle) * r];
+    } else if ((d -= Math.PI * r) < 2 * straight) {
+      [z, y, angle] = [straight - d, r, Math.PI];
+    } else {
+      angle = Math.PI + (d - 2 * straight) / r;
+      [z, y] = [-straight + Math.sin(angle) * r, -Math.cos(angle) * r];
+    }
+    pads.push(new THREE.BoxGeometry(TRACK.width + 0.02, 0.03, 0.045).rotateX(angle).translate(0, y, z));
+  }
+  const padRing = merged(pads);
+  for (const side of [-1, 1]) {
+    add(group, profile(frame, TRACK.width - 0.02, 0.02), mats.undercarriage, side * TRACK.x, r + 0.01, 0);
+    add(group, padRing.clone(), mats.rubber, side * TRACK.x, r + 0.01, 0);
+    // Idler and sprocket hubs, showing on the outside.
+    for (const z of [-straight, straight]) {
+      add(group, new THREE.CylinderGeometry(0.1, 0.1, 0.02, 20).rotateZ(Math.PI / 2), mats.machine, side * (TRACK.x + TRACK.width / 2), r + 0.01, z);
     }
   }
-  add(group, new THREE.BoxGeometry(0.6, 0.2, 1.3), mats.rubber, 0, 0.3, 0);
-  add(group, new THREE.CylinderGeometry(0.38, 0.38, 0.1, 20), mats.rubber, 0, 0.44, 0);
+  padRing.dispose();
+  add(group, rounded(0.62, 0.2, 1.2, 0.05), mats.undercarriage, 0, 0.3, 0);
+  add(group, new THREE.CylinderGeometry(0.38, 0.4, 0.1, 32), mats.undercarriage, 0, 0.44, 0);
 
   const house = new THREE.Group();
   house.position.y = 0.48;
   house.rotation.y = slew;
   group.add(house);
-  add(house, new THREE.BoxGeometry(1.05, 0.42, 1.25), mats.machine, 0, 0.22, -0.1);
-  add(house, new THREE.BoxGeometry(1.05, 0.36, 0.32), mats.machine, 0, 0.22, -0.86);
-  add(house, new THREE.BoxGeometry(0.55, 0.12, 0.62), mats.machine, 0.22, 0.49, -0.4);
-  add(house, new THREE.CylinderGeometry(0.025, 0.025, 0.3, 8), mats.rubber, 0.38, 0.65, -0.55);
-  // Cab: tinted glass in a yellow frame.
-  add(house, new THREE.BoxGeometry(0.44, 0.6, 0.56), mats.glass, -0.28, 0.73, 0.22);
-  add(house, new THREE.BoxGeometry(0.48, 0.05, 0.62), mats.machine, -0.28, 1.05, 0.22);
-  for (const [x, z] of [
-    [-0.49, -0.05],
-    [-0.07, -0.05],
-    [-0.49, 0.5],
-    [-0.07, 0.5],
-  ]) {
-    add(house, new THREE.BoxGeometry(0.04, 0.6, 0.04), mats.machine, x, 0.73, z);
-  }
-
-  // Boom, stick and bucket, with their rams.
-  const p0 = v(0.14, 0.42, 0.35);
-  const knee = v(0.14, 1.55, 1.1);
-  const p1 = v(0.14, 1.85, 1.95);
-  const p2 = v(0.14, 0.35, 2.7);
-  add(house, merged([bar(p0, knee, 0.2), bar(knee, p1, 0.18), bar(p1, p2, 0.13)]), mats.machine);
+  // Deck, engine cover and a rounded counterweight at the back.
+  add(house, rounded(1.08, 0.34, 1.32, 0.06), mats.machine, 0, 0.2, -0.05);
+  add(house, rounded(1.1, 0.42, 0.42, 0.14), mats.machine, 0, 0.23, -0.82);
+  add(house, rounded(0.6, 0.14, 0.7, 0.05), mats.machine, 0.2, 0.43, -0.42);
+  add(house, rounded(1.12, 0.05, 0.44, 0.02), mats.undercarriage, 0, 0.06, -0.82);
+  add(house, rod(v(0.38, 0.45, -0.58), v(0.38, 0.74, -0.58), 0.026), mats.undercarriage);
+  // Handrail along the right-hand deck.
   add(
     house,
-    merged([bar(v(0.14, 0.3, 0.6), v(0.14, 1.25, 1.0), 0.06), bar(v(0.14, 1.75, 1.35), v(0.14, 2.0, 1.95), 0.05)]),
+    merged([
+      rod(v(0.5, 0.37, 0.2), v(0.5, 0.62, 0.2), 0.012, 8),
+      rod(v(0.5, 0.37, -0.45), v(0.5, 0.62, -0.45), 0.012, 8),
+      rod(v(0.5, 0.62, 0.22), v(0.5, 0.62, -0.47), 0.012, 8),
+    ]),
+    mats.safety,
+  );
+
+  // Cab: tinted glass in a yellow frame, roof and lower panel.
+  const CAB = { x: -0.28, z: 0.22, w: 0.46, d: 0.6, h: 0.62, y: 0.42 };
+  add(house, rounded(CAB.w - 0.02, CAB.h - 0.1, CAB.d - 0.02, 0.04), mats.glass, CAB.x, CAB.y + CAB.h / 2 + 0.02, CAB.z);
+  add(house, rounded(CAB.w + 0.02, 0.16, CAB.d + 0.02, 0.04), mats.machine, CAB.x, CAB.y + 0.08, CAB.z);
+  add(house, rounded(CAB.w + 0.04, 0.06, CAB.d + 0.06, 0.025), mats.machine, CAB.x, CAB.y + CAB.h + 0.04, CAB.z);
+  const pillars: THREE.BufferGeometry[] = [];
+  for (const dx of [-1, 1]) {
+    for (const dz of [-1, 1]) {
+      pillars.push(rounded(0.04, CAB.h, 0.04, 0.012).translate(CAB.x + (dx * CAB.w) / 2, CAB.y + CAB.h / 2 + 0.02, CAB.z + (dz * CAB.d) / 2));
+    }
+  }
+  add(house, merged(pillars), mats.machine);
+
+  // Boom (curved), stick and bucket, in the plane x = 0.14, drawn side on
+  // as (z, y). The bucket curls under at the end of the stick.
+  const X = 0.14;
+  const root = new THREE.Vector2(0.32, 0.42);
+  const knee = new THREE.Vector2(1.12, 1.62);
+  const head = new THREE.Vector2(1.95, 1.86);
+  const wrist = new THREE.Vector2(2.68, 0.42);
+  const boomArm = arm([root, new THREE.Vector2(0.62, 1.12), knee, new THREE.Vector2(1.5, 1.88), head], 0.24, 0.15);
+  const stickArm = arm([head, new THREE.Vector2(2.3, 1.15), wrist], 0.15, 0.1);
+  add(house, profile(boomArm.shape, 0.2), mats.machine, X, 0, 0);
+  add(house, profile(stickArm.shape, 0.15), mats.machine, X, 0, 0);
+  const scoop = new THREE.Shape()
+    .moveTo(0, 0.04)
+    .quadraticCurveTo(-0.16, -0.06, -0.12, -0.26)
+    .quadraticCurveTo(-0.06, -0.4, 0.12, -0.38)
+    .lineTo(0.36, -0.3)
+    .lineTo(0.3, -0.22)
+    .quadraticCurveTo(0.12, -0.2, 0.1, -0.02)
+    .closePath();
+  const bucket = add(house, profile(scoop, 0.44, 0.02), mats.machine, X, wrist.y, wrist.x);
+  bucket.rotation.x = -0.6;
+  // Teeth along the lip.
+  const teeth: THREE.BufferGeometry[] = [];
+  for (const tx of [-0.15, -0.05, 0.05, 0.15]) teeth.push(rounded(0.05, 0.03, 0.09, 0.01).translate(tx, -0.31, 0.38));
+  const toothRow = add(house, merged(teeth), mats.undercarriage, X, wrist.y, wrist.x);
+  toothRow.rotation.x = -0.6;
+
+  // Hydraulic rams, each a cylinder with a polished rod, held just off the
+  // arm's edge: a pair under the boom from the deck, one along its back to
+  // the stick, one down the stick to the bucket.
+  const at = (p: THREE.Vector2, x: number) => v(x, p.y, p.x);
+  const ram = (a: THREE.Vector2, b: THREE.Vector2, x: number, radius: number) => {
+    const mid = a.clone().lerp(b, 0.58);
+    return [rod(at(a, x), at(mid, x), radius), rod(at(mid, x), at(b, x), radius * 0.55)];
+  };
+  const deck = new THREE.Vector2(0.52, 0.3);
+  const underBoom = boomArm.side(0.4, -0.02);
+  add(
+    house,
+    merged([
+      ...ram(deck, underBoom, X - 0.14, 0.045),
+      ...ram(deck, underBoom, X + 0.14, 0.045),
+      ...ram(boomArm.side(0.62, 0.05), stickArm.side(0.04, 0.12), X, 0.04),
+      ...ram(stickArm.side(0.12, 0.05), stickArm.side(0.88, 0.05), X, 0.032),
+    ]),
     mats.galvanised,
   );
-  const bucket = add(house, new THREE.BoxGeometry(0.5, 0.32, 0.36), mats.rubber, p2.x, p2.y - 0.05, p2.z + 0.12);
-  bucket.rotation.x = 0.5;
+  // Pins at each joint.
+  for (const p of [root, head, wrist]) add(house, new THREE.CylinderGeometry(0.05, 0.05, 0.26, 16).rotateZ(Math.PI / 2), mats.undercarriage, X, p.y, p.x);
   return group;
 }
 
-// Heras panels between rubber feet along each run of fence.
-function createFence(mats: Materials, runs: [THREE.Vector3, THREE.Vector3][], rand: () => number) {
+// Heras panels along each run of fence, drawn as a print would: a bold
+// galvanised frame round each panel, a sparse grid of bars standing for the
+// mesh, and a dark block foot at each joint.
+function createFence(mats: Materials, runs: [THREE.Vector3, THREE.Vector3][]) {
   const W = 3.5 * M;
   const H = 2 * M;
+  const lift = 0.07;
   const frames: THREE.BufferGeometry[] = [];
-  const meshes: THREE.BufferGeometry[] = [];
+  const grid: THREE.BufferGeometry[] = [];
   const feet: THREE.BufferGeometry[] = [];
-  const foot = (at: THREE.Vector3, heading: number) =>
-    new THREE.BoxGeometry(0.1, 0.07, 0.3).rotateY(heading).translate(at.x, 0.035, at.z);
+  const foot = (at: THREE.Vector3, heading: number) => rounded(0.12, 0.08, 0.32, 0.03).rotateY(heading).translate(at.x, 0.04, at.z);
   for (const [from, to] of runs) {
     const heading = Math.atan2(to.x - from.x, to.z - from.z);
-    const across = v(-(to.z - from.z), 0, to.x - from.x).normalize();
     const count = Math.max(1, Math.round(from.distanceTo(to) / W));
     for (let i = 0; i < count; i++) {
       const a = from.clone().lerp(to, i / count);
       const b = from.clone().lerp(to, (i + 1) / count);
-      const lean = (rand() - 0.5) * 0.04;
-      const lift = 0.07;
-      const ta = a.clone().setY(lift + H);
-      const tb = b.clone().setY(lift + H);
-      const ba = a.clone().setY(lift);
-      const bb = b.clone().setY(lift);
-      const sway = across.clone().multiplyScalar(lean);
-      ta.add(sway);
-      tb.add(sway);
-      frames.push(bar(ba, ta, 0.018), bar(bb, tb, 0.018), bar(ta, tb, 0.018), bar(ba, bb, 0.018));
-      const plane = new THREE.PlaneGeometry(1, 1);
-      const p = plane.attributes.position;
-      const quad = [ta, tb, ba, bb];
-      for (let k = 0; k < 4; k++) p.setXYZ(k, quad[k].x, quad[k].y, quad[k].z);
-      plane.computeVertexNormals();
-      meshes.push(plane);
-      // Feet sit square across the run.
+      const at = (t: number, y: number) => a.clone().lerp(b, t).setY(lift + y);
+      frames.push(rod(at(0.01, 0), at(0.01, H), 0.022, 8), rod(at(0.99, 0), at(0.99, H), 0.022, 8));
+      frames.push(rod(at(0, H), at(1, H), 0.018, 8), rod(at(0, 0), at(1, 0), 0.018, 8));
+      for (const t of [1 / 3, 2 / 3]) grid.push(rod(at(t, 0), at(t, H), 0.008, 6));
+      grid.push(rod(at(0, H / 2), at(1, H / 2), 0.008, 6));
       feet.push(foot(a, heading + Math.PI / 2));
     }
     feet.push(foot(to, heading + Math.PI / 2));
   }
   const group = new THREE.Group();
   add(group, merged(frames), mats.galvanised);
-  add(group, merged(meshes), mats.fence);
+  add(group, merged(grid), mats.galvanised);
   add(group, merged(feet), mats.rubber);
   return group;
 }
@@ -822,11 +901,11 @@ function createFloodlight(mats: Materials, x: number, z: number, target: THREE.V
   group.position.set(x, 0, z);
   group.rotation.y = Math.atan2(target.x - x, target.z - z);
   const HEIGHT = 4.6;
-  add(group, new THREE.BoxGeometry(0.6, 0.25, 0.6), mats.concrete, 0, 0.125, 0);
-  add(group, new THREE.CylinderGeometry(0.04, 0.06, HEIGHT, 10), mats.galvanised, 0, HEIGHT / 2, 0);
-  add(group, new THREE.BoxGeometry(1.0, 0.04, 0.04), mats.galvanised, 0, HEIGHT, 0);
+  add(group, rounded(0.6, 0.25, 0.6, 0.05), mats.concrete, 0, 0.125, 0);
+  add(group, new THREE.CylinderGeometry(0.04, 0.06, HEIGHT, 12), mats.galvanised, 0, HEIGHT / 2, 0);
+  add(group, rounded(1.0, 0.04, 0.04, 0.015), mats.galvanised, 0, HEIGHT, 0);
   for (const lx of [-0.36, -0.12, 0.12, 0.36]) {
-    const lamp = add(group, new THREE.BoxGeometry(0.2, 0.16, 0.06), mats.lamp, lx, HEIGHT + 0.12, 0.05);
+    const lamp = add(group, rounded(0.2, 0.16, 0.07, 0.025), mats.lamp, lx, HEIGHT + 0.12, 0.05);
     lamp.rotation.x = 0.35;
   }
   return { group, head: new THREE.Vector3(x, HEIGHT + 0.1, z) };
@@ -849,12 +928,7 @@ export function buildYard({
   const rand = rng(23);
   const wind = { value: 0 };
 
-  const { texture: meadowMap, ready: texturesReady } = imageTexture(TEXTURE_URLS.meadow, "YardScene");
-  meadowMap.anisotropy = anisotropy;
-  meadowMap.wrapS = meadowMap.wrapT = THREE.RepeatWrapping;
-  meadowMap.repeat.set(4000 / 3, 4000 / 3);
-
-  const mats = createMaterials(anisotropy, rand, meadowMap);
+  const mats = createMaterials(anisotropy, rand);
 
   function ground(width: number, depth: number, material: THREE.Material, x: number, y: number, z: number) {
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), material);
@@ -883,43 +957,89 @@ export function buildYard({
     scene.add(mesh);
   }
 
-  // The signpost: the direction panels, worn and weathered, on two posts
-  // whose galvanising has long since given way to rust. Its own seed, so the
-  // rest of the yard keeps its layout.
-  const rust = groundTexture(rng(41), { base: "#7d7468", light: "168,160,148", dark: "112,58,26" }, 3000);
-  rust.wrapS = rust.wrapT = THREE.RepeatWrapping;
-  rust.repeat.set(1, 6);
-  const rusty = new THREE.MeshStandardMaterial({ map: rust, roughness: 0.85, metalness: 0.35 });
+  // Puddles left by the last rain, flat pools of the sky's colour, each in
+  // a rim of darker, wet earth; and rubble in heaps along the way.
+  const puddle = new THREE.MeshBasicMaterial({ polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+  const wet = ink({ color: 0x5e4630, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  for (const [x, z, rx, rz, turn] of [
+    [-5.6, 10.6, 1.5, 0.62, 0.25],
+    [4.4, 12.2, 0.95, 0.42, -0.2],
+    [-1.6, 4.2, 1.2, 0.5, 0.1],
+    [7.6, 1.2, 1.7, 0.66, 0.4],
+    [-12.5, 1.5, 1.1, 0.45, -0.3],
+  ]) {
+    const pool = (scale: number, material: THREE.Material, y: number) => {
+      const mesh = new THREE.Mesh(new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2), material);
+      mesh.scale.set(rx * scale, 1, rz * scale);
+      mesh.rotation.y = turn;
+      mesh.position.set(x, DIRT_Y + y, z);
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+    };
+    pool(1.14, wet, 0.008);
+    pool(1, puddle, 0.012);
+  }
+  const pebble = new THREE.IcosahedronGeometry(1, 1).scale(1, 0.55, 0.8);
+  const rubbleSpots: [number, number, number][] = [
+    [-8.3, 11.2, 9],
+    [6.8, 9.6, 7],
+    [-3.2, -1.8, 8],
+    [2.6, 5.2, 5],
+    [12.5, -2.5, 7],
+  ];
+  const rubble = new THREE.InstancedMesh(pebble, ink({ color: 0xb3aa9c }), rubbleSpots.reduce((n, [, , k]) => n + k, 0));
+  {
+    const dummy = new THREE.Object3D();
+    const tint = new THREE.Color();
+    let i = 0;
+    for (const [cx, cz, count] of rubbleSpots) {
+      for (let k = 0; k < count; k++) {
+        const size = 0.06 + rand() * 0.12;
+        dummy.position.set(cx + (rand() - 0.5) * 1.4, DIRT_Y + size * 0.25, cz + (rand() - 0.5) * 0.9);
+        dummy.rotation.set(0, rand() * Math.PI, 0);
+        dummy.scale.setScalar(size);
+        dummy.updateMatrix();
+        rubble.setMatrixAt(i, dummy.matrix);
+        const v = 0.8 + rand() * 0.3;
+        rubble.setColorAt(i++, tint.setRGB(v, v * 0.97, v * 0.93));
+      }
+    }
+  }
+  rubble.castShadow = rubble.receiveShadow = true;
+  scene.add(rubble);
+
+  // The signpost: the direction panels on two galvanised posts, as clean
+  // as the gantry's.
   const signpost = new THREE.Group();
   signpost.rotation.order = "YXZ";
-  const signs = createGantrySign(layout.panels, { font, z: layout.z, metal: rusty, anisotropy, lamps: false, wear: 1 });
+  const signs = createGantrySign(layout.panels, { font, z: layout.z, metal: mats.galvanised, anisotropy, lamps: false });
   signpost.add(signs.group);
   const postHeight = layout.top - 0.02;
   for (const x of [layout.left * 0.6, layout.right * 0.6]) {
-    add(signpost, new THREE.CylinderGeometry(0.045, 0.045, postHeight, 12), rusty, x, postHeight / 2, 0);
+    add(signpost, new THREE.CylinderGeometry(0.05, 0.05, postHeight, 16), mats.galvanised, x, postHeight / 2, 0);
   }
   signpost.scale.setScalar(SIGNPOST.scale);
   scene.add(signpost);
 
-  // The emergency phone, beside it: battered, on the same rusty steel
-  // (see road/phone.ts).
-  const phone = createPhone({ post: rusty, worn: true });
+  // The emergency phone, beside it, the same one as in the lay-by (see
+  // road/phone.ts).
+  const phone = createPhone({ post: mats.galvanised });
   phone.group.rotation.order = "YXZ";
   phone.group.scale.setScalar(PHONE.scale);
   scene.add(phone.group);
 
   // Stands the signpost x across (capped at SIGNPOST.maxX), facing the
-  // camera, leaning, with the phone at its side. The phone turns a little
+  // camera, with the phone at its side. The phone turns a little
   // further than square on, so it shows its side.
   function placeSignpost(x: number) {
     x = Math.min(x, SIGNPOST.maxX);
     signpost.position.set(x, 0, SIGNPOST.z);
-    signpost.rotation.set(SIGNPOST_LEAN.back, Math.atan2(EYE.x - x, EYE.z - SIGNPOST.z), SIGNPOST_LEAN.side);
+    signpost.rotation.set(0, Math.atan2(EYE.x - x, EYE.z - SIGNPOST.z), 0);
     signpost.updateMatrixWorld(true);
     const px = x + layout.left * SIGNPOST.scale - PHONE.gap;
     const pz = SIGNPOST.z + PHONE.forward;
     phone.group.position.set(px, DIRT_Y, pz);
-    phone.group.rotation.set(PHONE.lean.back, Math.atan2(EYE.x - px, EYE.z - pz) + 0.35, PHONE.lean.side);
+    phone.group.rotation.set(0, Math.atan2(EYE.x - px, EYE.z - pz) + 0.35, 0);
     phone.group.updateMatrixWorld(true);
   }
   placeSignpost(SIGNPOST.maxX);
@@ -962,8 +1082,10 @@ export function buildYard({
   add(scene, heap(1.9, 0.9, 6.3), mats.gravel, 21, DIRT_Y, -34);
 
   // Welfare cabins, double-stacked, with a stair up the end.
+  // Each a box with rounded edges under a roof that overhangs a little.
   function cabin(x: number, y: number, z: number, rotation: number) {
-    return add(scene, new THREE.BoxGeometry(6 * M, 2.6 * M, 2.6 * M), mats.cabin, x, y + 1.3 * M, z, rotation);
+    add(scene, rounded(6 * M + 0.06, 0.05, 2.6 * M + 0.08, 0.02), mats.cabin[2], x, y + 2.6 * M + 0.02, z, rotation);
+    return add(scene, rounded(6 * M, 2.6 * M, 2.6 * M, 0.035), mats.cabin, x, y + 1.3 * M, z, rotation);
   }
   const CABIN = { x: 11, z: -5, rotation: -0.35 };
   const Y = v(0, 1, 0);
@@ -989,9 +1111,10 @@ export function buildYard({
     mats.galvanised,
   );
 
-  add(scene, new THREE.BoxGeometry(6.06 * M, 2.59 * M, 2.44 * M), mats.containerRed, 18, 1.295 * M, -13, 0.25);
-  add(scene, new THREE.BoxGeometry(6.06 * M, 2.59 * M, 2.44 * M), mats.containerBlue, 18.3, 3.885 * M + 0.002, -13.1, 0.22);
-  add(scene, new THREE.BoxGeometry(6.06 * M, 2.59 * M, 2.44 * M), mats.containerBlue, -16, 1.295 * M, -14, 1.35);
+  const container = () => rounded(6.06 * M, 2.59 * M, 2.44 * M, 0.04);
+  add(scene, container(), mats.containerRed, 18, 1.295 * M, -13, 0.25);
+  add(scene, container(), mats.containerBlue, 18.3, 3.885 * M + 0.002, -13.1, 0.22);
+  add(scene, container(), mats.containerBlue, -16, 1.295 * M, -14, 1.35);
 
   // Concrete drainage pipes, chocked in a pyramid.
   const pipe = new THREE.CylinderGeometry(0.36, 0.36, 1.05, 24, 1, true).rotateZ(Math.PI / 2);
@@ -1010,8 +1133,8 @@ export function buildYard({
     [6.7, -8.6, 0.25],
     [5.4, -9.1, -0.1],
   ]) {
-    add(scene, new THREE.BoxGeometry(0.53, 0.07, 0.48), mats.wood, x, 0.035, z, rotation);
-    add(scene, new THREE.BoxGeometry(0.5, 0.4, 0.45), mats.bricks, x, 0.27, z, rotation);
+    add(scene, rounded(0.53, 0.07, 0.48, 0.01), mats.wood, x, 0.035, z, rotation);
+    add(scene, rounded(0.5, 0.4, 0.45, 0.02), mats.bricks, x, 0.27, z, rotation);
   }
 
   const fence = createFence(
@@ -1023,7 +1146,6 @@ export function buildYard({
       [v(YARD.right, 0, YARD.back), v(YARD.left, 0, YARD.back)],
       [v(YARD.left, 0, YARD.back), v(YARD.left, 0, YARD.front)],
     ],
-    rand,
   );
   scene.add(fence);
 
@@ -1067,166 +1189,46 @@ export function buildYard({
   });
   scene.add(forest.group);
 
-  function ridge(material: THREE.Material, z: number, depth: number, base: number, amp: number, seed: number) {
-    const geometry = new THREE.PlaneGeometry(1800, depth, 180, 14).rotateX(-Math.PI / 2);
-    const position = geometry.attributes.position;
-    for (let i = 0; i < position.count; i++) {
-      const x = position.getX(i);
-      const across = Math.cos((position.getZ(i) / depth) * Math.PI) ** 1.5;
-      const profile = base + amp * (0.5 + 0.3 * Math.sin(x * 0.011 + seed) + 0.2 * Math.sin(x * 0.031 + seed * 2) + 0.08 * Math.sin(x * 0.09 + seed * 3));
-      position.setY(i, profile * across - 1);
-      position.setZ(i, position.getZ(i) + (x * x) / 5000);
-    }
-    geometry.computeVertexNormals();
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.z = z;
-    scene.add(mesh);
-  }
-  ridge(mats.hillFar, -460, 280, 6, 34, 2.2);
-  ridge(mats.hillNear, -260, 130, 2, 12, 5.3);
-
-  const skyMaterial = new THREE.ShaderMaterial({
-    uniforms: {
-      uTop: { value: new THREE.Color() },
-      uHorizon: { value: new THREE.Color() },
-      uSun: { value: new THREE.Color() },
-      uSunDirection: { value: new THREE.Vector3() },
-      uSunDisc: { value: 1 },
-      uSunGlow: { value: 1 },
+  // The sky, clouds, site dust hanging in the low sun, hills and light (see
+  // scene/atmosphere.ts). The camera barely moves, so the shadow map can sit
+  // still over the yard.
+  const atmosphere = createAtmosphere(scene, {
+    rand,
+    time: wind,
+    clouds: { facing: 0 },
+    dust: { count: Math.round(900 * detail), x: [-17, 17], y: [0.1, 4.6], z: [EYE.z - 2, EYE.z - 42] },
+    shadow: { extent: 34, distance: 120, far: 260, mapSize: detail < 1 ? 1024 : 2048 },
+    fog: [40, 600],
+    hills: {
+      far: { z: -460, depth: 280, base: 6, amp: 34, seed: 2.2 },
+      near: { z: -260, depth: 130, base: 2, amp: 12, seed: 5.3 },
+      valley: false,
     },
-    vertexShader: skyVertex,
-    fragmentShader: skyFragment,
-    side: THREE.BackSide,
-    depthWrite: false,
   });
-  const skyGeometry = new THREE.SphereGeometry(1500, 48, 24);
-  const sky = new THREE.Mesh(skyGeometry, skyMaterial);
-  sky.renderOrder = -1;
-  scene.add(sky);
-  const skyScene = new THREE.Scene();
-  skyScene.add(new THREE.Mesh(skyGeometry, skyMaterial));
-
-  const cloudMaterial = new THREE.SpriteMaterial({
-    map: radialTexture([
-      [0, "rgba(255,255,255,1)"],
-      [0.45, "rgba(255,255,255,0.55)"],
-      [1, "rgba(255,255,255,0)"],
-    ]),
-    transparent: true,
-    depthWrite: false,
-    fog: false,
-    opacity: 0.85,
-  });
-  const clouds = new THREE.Group();
-  for (let c = 0; c < 10; c++) {
-    const angle = THREE.MathUtils.degToRad(-65 + c * 13 + rand() * 6);
-    const distance = 700 + rand() * 300;
-    const middle = new THREE.Vector3(Math.sin(angle) * distance, 80 + rand() * 190, -Math.cos(angle) * distance);
-    const puffs = 5 + Math.floor(rand() * 4);
-    for (let p = 0; p < puffs; p++) {
-      const sprite = new THREE.Sprite(cloudMaterial);
-      sprite.position.copy(middle).add(new THREE.Vector3((rand() - 0.5) * 140, (rand() - 0.5) * 22, (rand() - 0.5) * 40));
-      sprite.scale.set(110 + rand() * 130, 40 + rand() * 45, 1);
-      clouds.add(sprite);
-    }
-  }
-  scene.add(clouds);
-
-  // Site dust hanging in the low sun.
-  const dustCount = Math.round(900 * detail);
-  const dustPositions = new Float32Array(dustCount * 3);
-  const dustSeeds = new Float32Array(dustCount);
-  for (let i = 0; i < dustCount; i++) {
-    dustPositions.set([(rand() - 0.5) * 34, 0.1 + rand() * 4.5, EYE.z - 2 - rand() * 40], i * 3);
-    dustSeeds[i] = rand();
-  }
-  const dustGeometry = new THREE.BufferGeometry();
-  dustGeometry.setAttribute("position", new THREE.BufferAttribute(dustPositions, 3));
-  dustGeometry.setAttribute("aSeed", new THREE.BufferAttribute(dustSeeds, 1));
-  const dustMaterial = new THREE.ShaderMaterial({
-    uniforms: { uTime: wind, uScale: { value: 1000 }, uColor: { value: new THREE.Color() } },
-    vertexShader: dustVertex,
-    fragmentShader: dustFragment,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-  });
-  const dust = new THREE.Points(dustGeometry, dustMaterial);
-  dust.frustumCulled = false;
-  scene.add(dust);
-
-  const hemi = new THREE.HemisphereLight();
-  scene.add(hemi);
-  // The camera barely moves, so the shadow map can sit still over the yard.
-  const sun = new THREE.DirectionalLight();
-  sun.castShadow = true;
-  sun.shadow.mapSize.setScalar(detail < 1 ? 1024 : 2048);
-  Object.assign(sun.shadow.camera, { left: -34, right: 34, top: 34, bottom: -34, near: 1, far: 260 });
-  sun.shadow.bias = -0.0004;
-  sun.shadow.normalBias = 0.03;
-  sun.shadow.radius = 3;
-  sun.shadow.camera.updateProjectionMatrix();
-  sun.target.position.set(0, 0, -16);
-  scene.add(sun, sun.target);
-  const sunDirection = new THREE.Vector3();
-  scene.fog = new THREE.Fog(0xffffff, 40, 600);
+  atmosphere.aimSun(new THREE.Vector3(0, 0, -16));
 
   function apply(p: YardPalette) {
-    const elevation = THREE.MathUtils.degToRad(p.sunElevation);
-    const azimuth = THREE.MathUtils.degToRad(p.sunAzimuth);
-    sunDirection.set(Math.sin(azimuth) * Math.cos(elevation), Math.sin(elevation), -Math.cos(azimuth) * Math.cos(elevation));
-    sun.position.copy(sun.target.position).addScaledVector(sunDirection, 120);
-    skyMaterial.uniforms.uTop.value.set(p.skyTop);
-    skyMaterial.uniforms.uHorizon.value.set(p.skyHorizon);
-    skyMaterial.uniforms.uSun.value.set(p.sun);
-    skyMaterial.uniforms.uSunDirection.value.copy(sunDirection);
-    (scene.fog as THREE.Fog).color.set(p.fog);
-    sun.color.set(p.sun);
-    sun.intensity = p.sunIntensity;
-    hemi.color.set(p.hemiSky);
-    hemi.groundColor.set(p.hemiGround);
-    hemi.intensity = p.hemiIntensity;
-    scene.environmentIntensity = p.envIntensity;
-
+    atmosphere.apply(p);
     mats.meadow.color.set(p.meadow);
+    // Still water shows the sky above it, a shade darker.
+    puddle.color.set(p.skyTop).lerp(new THREE.Color(p.skyHorizon), 0.3).multiplyScalar(0.8);
     for (const material of [mats.dirt, mats.heap]) material.color.set(p.dirt);
     mats.tracks.color.set(p.dirt).multiplyScalar(0.42);
-    mats.hillFar.color.set(p.hillFar);
-    mats.hillNear.color.set(p.hillNear);
-    cloudMaterial.color.set(p.cloud);
-    dustMaterial.uniforms.uColor.value.set(p.dust);
     mats.lamp.emissiveIntensity = p.floodlights * 2.5;
     for (const spot of spots) spot.intensity = p.floodlights;
     for (const wall of mats.cabinWalls) wall.emissiveIntensity = p.windows;
     crane.beaconMaterial.color.set(0xff2a1a).multiplyScalar(p.beacon);
-    // Sun-bleached sheeting that has lost most of its shine.
-    signs.setColors(new THREE.Color(p.sign).lerp(SIGN_FADE, 0.3).getHex(), p.signGlow * 0.4);
+    signs.setColors(p.sign, p.signGlow * 0.3);
   }
 
-  function withDimSun<T>(capture: () => T) {
-    skyMaterial.uniforms.uSunDisc.value = 0;
-    skyMaterial.uniforms.uSunGlow.value = 0.12;
-    try {
-      return capture();
-    } finally {
-      skyMaterial.uniforms.uSunDisc.value = 1;
-      skyMaterial.uniforms.uSunGlow.value = 1;
-    }
-  }
-
-  const ready = Promise.allSettled([forest.ready, texturesReady, signs.ready]);
+  const ready = Promise.allSettled([forest.ready, signs.ready]);
 
   return {
     scene,
-    skyScene,
-    withDimSun,
+    atmosphere,
     ready,
-    forest,
-    sky,
-    clouds,
-    dust: dustMaterial,
-    wind,
     apply,
+    dispose: forest.dispose,
     update: crane.update,
     sign: signs,
     signpost,

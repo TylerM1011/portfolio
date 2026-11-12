@@ -1,21 +1,42 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* The site's colours come from the scenes' light (see
+     src/components/road/palette.ts): by day the warm haze on the horizon
+     and the road's dark asphalt, at dusk the deep blue overhead and the
+     glow on the skyline. The sky gradients are the scenes' own, for pages
+     without a scene to stand on. */
+  --background: #f3e8d6;
+  --foreground: #26231e;
+  --sky-top: #3f7cc6;
+  --sky-horizon: #f0d6aa;
+  --land: #7f9f72;
+  --land-far: #9db5a6;
+  /* UK primary route green and its border, for signs drawn in HTML. */
+  --sign: #00703c;
+  /* The footer's glass: the colour of the road at this time of day. */
+  --strip: rgb(30 27 23 / 0.62);
+  --strip-ink: #f3ece0;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-sign);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #191a33;
+    --foreground: #f1e6da;
+    --sky-top: #1c1f4d;
+    --sky-horizon: #f08a5d;
+    --land: #4a5068;
+    --land-far: #6a557e;
+    --sign: #00653a;
+    --strip: rgb(18 18 38 / 0.62);
+    --strip-ink: #f1e6da;
   }
 }
 
@@ -31,6 +52,8 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
+  /* Transport has one weight: headings carry size, not synthesised bold. */
+  font-synthesis-weight: none;
 }
 
 /* The loading screen (see LoadingScreen): its layout and the wheel's spin
@@ -173,16 +196,18 @@ body {
   }
 }
 
-/* The sheets lie flat on the site, so their shadows are short and soft. */
+/* The sheets lie flat on the site, so their shadows are short and soft,
+   and they fall away from the yard's low sun, off to the left. */
 .blueprint-wrap {
-  filter: drop-shadow(0 0.45rem 0.55rem rgba(20, 14, 6, 0.38)) drop-shadow(0 0.1rem 0.15rem rgba(20, 14, 6, 0.25));
+  --sheet-shadow: drop-shadow(0.35rem 0.5rem 0.6rem rgba(36, 22, 8, 0.36)) drop-shadow(0.08rem 0.12rem 0.15rem rgba(36, 22, 8, 0.24));
+  filter: var(--sheet-shadow);
 }
 
 /* Each sheet is the blue print itself, pinned at its top corners. No
    backing sheet: the paper is .blueprint-sheet. */
 .blueprint {
-  --ink: #eef5ff;
-  --line: rgba(238, 245, 255, 0.75);
+  --ink: #eef1ea;
+  --line: rgba(238, 241, 234, 0.72);
   --pin: #e0352b;
   position: relative;
   display: block;
@@ -201,7 +226,8 @@ body {
   --pin: #2f9e5b;
 }
 
-/* Push pins: a glossy plastic head throwing a small shadow down the sheet. */
+/* Push pins: a plastic head in two flat inks throwing a small shadow down
+   the sheet. */
 .blueprint::before,
 .blueprint::after {
   position: absolute;
@@ -211,8 +237,8 @@ body {
   height: 0.95rem;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.85) 0 12%, transparent 30%),
-    radial-gradient(circle at 50% 50%, var(--pin) 0 55%, color-mix(in srgb, var(--pin) 60%, black) 100%);
+    radial-gradient(circle at 36% 32%, color-mix(in srgb, var(--pin) 45%, white) 0 22%, transparent 24%),
+    var(--pin);
   box-shadow:
     0.18rem 0.28rem 0.25rem rgba(4, 14, 36, 0.45),
     inset -0.08rem -0.1rem 0.15rem rgba(0, 0, 0, 0.3);
@@ -241,6 +267,42 @@ body {
 .blueprint:focus-visible {
   outline: 3px solid #ffd200;
   outline-offset: 4px;
+}
+
+/* While the emergency phone's dial is open, the sheets gather into a pile
+   behind it, and fan back out when it closes (see sheetStack.ts, which
+   works out each sheet's travel). Played on the individual transform
+   properties, so it composes with the fall-in below, in the same easing
+   family and at a similar pace, one sheet after another. */
+.blueprint-wrap {
+  translate: 0 0;
+  rotate: 0deg;
+  scale: 1;
+  transition-property: translate, rotate, scale;
+  transition-duration: 700ms;
+  transition-timing-function: cubic-bezier(0.3, 0, 0.2, 1);
+  transition-delay: calc(var(--i, 0) * 70ms);
+}
+
+.blueprints[data-stacked] .blueprint-wrap {
+  translate: var(--stack-x) var(--stack-y);
+  rotate: var(--stack-turn);
+  scale: var(--stack-scale);
+}
+
+.blueprints[data-stacked] .blueprint {
+  pointer-events: none;
+}
+
+/* On phones, the sideways strip stops clipping while the sheets are away. */
+.blueprints[data-lifted] {
+  overflow: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blueprint-wrap {
+    transition: none;
+  }
 }
 
 /* As the page loads the sheets fall onto the site one after another: each drifts
@@ -284,7 +346,7 @@ body {
   }
   74% {
     transform: translate(calc(var(--sway) * -0.3rem), 0) rotate(calc(var(--sway) * -1deg)) scale(1);
-    filter: drop-shadow(0 0.45rem 0.55rem rgba(20, 14, 6, 0.38)) drop-shadow(0 0.1rem 0.15rem rgba(20, 14, 6, 0.25));
+    filter: var(--sheet-shadow);
     animation-timing-function: ease-out;
   }
   /* Air trapped underneath lifts the sheet a touch as it lands. */
@@ -294,7 +356,7 @@ body {
   100% {
     opacity: 1;
     transform: translate(0, 0) rotate(0deg) scale(1);
-    filter: drop-shadow(0 0.45rem 0.55rem rgba(20, 14, 6, 0.38)) drop-shadow(0 0.1rem 0.15rem rgba(20, 14, 6, 0.25));
+    filter: var(--sheet-shadow);
   }
 }
 
@@ -329,27 +391,47 @@ body:has(.loading-screen:not([data-state="hidden"])) .blueprint::after {
   animation-play-state: paused;
 }
 
-/* The print: brighter on the left, deepening to the right, on a grid. */
+/* The print: a cyanotype, Prussian blue on paper, its exposure a little
+   uneven, on a grid. Over it lies the light of the yard it sits in (warm
+   from the sun's side by day; dimmer, with an orange edge, at dusk), so the
+   sheets read as paper out on the site, not as a screen above it. */
 .blueprint-sheet {
+  --sheet-light: linear-gradient(105deg, rgba(255, 216, 160, 0.2), rgba(255, 216, 160, 0) 55%);
   position: relative;
   display: block;
   padding: 0.6rem;
   border-radius: 1px;
   /* A faint lighter edge where the paper was trimmed. */
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
-  background-color: #2d78d6;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  background-color: #275a91;
   background-image:
-    linear-gradient(rgba(238, 245, 255, 0.14) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(238, 245, 255, 0.14) 1px, transparent 1px),
-    linear-gradient(rgba(238, 245, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(238, 245, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(100deg, #4aa3f4, #2f7fdc 45%, #1f5bb2 80%, #1b4f9e);
+    var(--sheet-light),
+    linear-gradient(rgba(238, 241, 234, 0.13) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(238, 241, 234, 0.13) 1px, transparent 1px),
+    linear-gradient(rgba(238, 241, 234, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(238, 241, 234, 0.05) 1px, transparent 1px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.008' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0.05 0 0 0 0 0.12 0 0 0 0 0.25 0 0 0 0.9 -0.25'/%3E%3C/filter%3E%3Crect width='320' height='320' filter='url(%23m)'/%3E%3C/svg%3E"),
+    linear-gradient(100deg, #3b74ab, #2b6199 45%, #224e82 80%, #1d4472);
   background-size:
+    100% 100%,
     2rem 2rem,
     2rem 2rem,
     0.5rem 0.5rem,
     0.5rem 0.5rem,
+    20rem 20rem,
     100% 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+  .blueprint-sheet {
+    --sheet-light:
+      linear-gradient(105deg, rgba(255, 140, 90, 0.2), rgba(255, 140, 90, 0) 45%),
+      linear-gradient(rgba(22, 18, 48, 0.24), rgba(22, 18, 48, 0.24));
+  }
+
+  .blueprint-wrap {
+    --sheet-shadow: drop-shadow(0.5rem 0.55rem 0.8rem rgba(10, 6, 20, 0.5)) drop-shadow(0.1rem 0.12rem 0.2rem rgba(10, 6, 20, 0.3));
+  }
 }
 
 /* Zone ticks along all four margins, between the print's edge and frame. */
@@ -501,9 +583,8 @@ body:has(.loading-screen:not([data-state="hidden"])) .blueprint::after {
   --sign: #00703c;
 }
 
-/* The yard's signpost has faded in the sun (see yard/world.ts). */
 .yard-scene {
-  --sign: #2f7552;
+  --sign: #00703c;
 }
 
 /* Dark mode is dusk: the sign sits a little darker against the sunset. */
@@ -513,7 +594,7 @@ body:has(.loading-screen:not([data-state="hidden"])) .blueprint::after {
   }
 
   .yard-scene {
-    --sign: #2b6a4a;
+    --sign: #00653a;
   }
 
   .layby-scene {

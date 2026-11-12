@@ -12,6 +12,8 @@ const LINES = [
   { digit: 2, name: "GitHub", detail: "See what I'm building", href: site.github },
 ] as const;
 const lineFor = (digit: number) => LINES.find((line) => line.digit === digit);
+// The name the CV is saved under when downloaded from the directory card.
+const CV_FILENAME = "Tyler-McAndrew-CV.pdf";
 
 // A rotary dial, in degrees clockwise from twelve o'clock. The finger stop
 // sits at about four o'clock; 1 is the first hole above it and the rest run
@@ -65,7 +67,8 @@ type Props = {
 
 // The emergency phone's dial, brought up when the phone on the contact page
 // is picked up (see LaybyScene): 0 for the CV, 1 for LinkedIn, 2 for GitHub,
-// each opened in a new tab once the wheel reaches the stop. Each wired hole
+// each opened in a new tab once the wheel has turned to the stop and come
+// back to rest. Each wired hole
 // is a real link, so it still works without the animation; the number keys
 // dial too, and Escape hangs up.
 export default function PhoneDial({ open, origin, onClose, onDial }: Props) {
@@ -105,10 +108,18 @@ export default function PhoneDial({ open, origin, onClose, onDial }: Props) {
 
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const angle = travel(digit);
-    if (!still) await turnTo(0, angle, TURN_SPEED);
+    // The whole dial first: the wheel turns to the stop, pauses, and the
+    // spring brings it back to rest. Each turn resolves when its animation
+    // has drawn its last frame, so the call can't go through early.
+    if (!still) {
+      await turnTo(0, angle, TURN_SPEED);
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      await turnTo(angle, 0, RETURN_SPEED);
+    }
 
-    // At the stop, the call goes through. Opened here, well inside the
-    // click's grace period, so pop-up blockers let it by; if one doesn't,
+    // Then the call goes through. The longest dial (0) takes about 1.5 s,
+    // well inside the click's grace period for opening a tab (about 5 s in
+    // Chromium and Firefox), so pop-up blockers let it by; if one doesn't,
     // the page itself goes there.
     if (line) {
       const tab = window.open(line.href, "_blank");
@@ -117,11 +128,6 @@ export default function PhoneDial({ open, origin, onClose, onDial }: Props) {
       setStatus(`${line.name} opened in a new tab. Dial again, or hang up.`);
     } else {
       setStatus(`The number you have dialled has not been recognised. Try 0, 1 or 2.`);
-    }
-
-    if (!still) {
-      await new Promise((resolve) => setTimeout(resolve, 120));
-      await turnTo(angle, 0, RETURN_SPEED);
     }
     busy.current = false;
     setDialling(null);
@@ -180,7 +186,7 @@ export default function PhoneDial({ open, origin, onClose, onDial }: Props) {
       <div
         aria-hidden
         onClick={onClose}
-        className="absolute inset-0 bg-black/35 opacity-0 backdrop-blur-[3px] transition-opacity duration-500 group-data-open/dial:opacity-100 group-data-open/dial:delay-200"
+        className="absolute inset-0 bg-[#15162a]/40 opacity-0 backdrop-blur-[3px] transition-opacity duration-500 group-data-open/dial:opacity-100 group-data-open/dial:delay-200"
       />
 
       <div
@@ -188,7 +194,7 @@ export default function PhoneDial({ open, origin, onClose, onDial }: Props) {
         className="phone-dial-panel relative flex flex-col items-center gap-5 sm:flex-row sm:items-center sm:gap-8"
       >
         {/* The phone's housing, round the dial. */}
-        <div className="relative rounded-[2.25rem] bg-[#ec7a1c] p-3 shadow-[0_30px_60px_-20px_rgba(0,0,0,0.6),inset_0_-6px_0_rgba(0,0,0,0.18)] sm:p-4">
+        <div data-phone-housing className="relative rounded-[2.25rem] bg-[#ec7a1c] p-3 shadow-[0_24px_40px_-20px_rgba(21,22,42,0.6),inset_0_-6px_0_rgba(0,0,0,0.18)] sm:p-4">
           <div className="rounded-[1.75rem] bg-[#1e2024] p-3 shadow-[inset_0_4px_12px_rgba(0,0,0,0.6)] sm:p-4">
             <svg
               viewBox="-160 -160 320 320"
@@ -196,22 +202,10 @@ export default function PhoneDial({ open, origin, onClose, onDial }: Props) {
               role="group"
               aria-label="Rotary dial"
             >
-              <defs>
-                <radialGradient id="dial-plate" cx="0.4" cy="0.35" r="0.8">
-                  <stop offset="0" stopColor="#3a3c40" />
-                  <stop offset="1" stopColor="#141518" />
-                </radialGradient>
-                <linearGradient id="dial-chrome" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stopColor="#fbfbf9" />
-                  <stop offset="0.45" stopColor="#c9ccd0" />
-                  <stop offset="0.55" stopColor="#b3b7bc" />
-                  <stop offset="1" stopColor="#eceeef" />
-                </linearGradient>
-              </defs>
-
               {/* The number ring, under the wheel, showing through the
                   holes. The wired numbers are yellow. */}
-              <circle r="154" fill="url(#dial-plate)" stroke="#0b0b0c" strokeWidth="3" />
+              {/* Drawn in flat inks, like the phone in the scene: no chrome. */}
+              <circle r="154" fill="#26282d" stroke="#15162a" strokeWidth="3" />
               {DIGITS.map((digit) => {
                 const { x, y } = at(holeAngle(digit), HOLE_RING);
                 const wired = !!lineFor(digit);
@@ -241,10 +235,10 @@ export default function PhoneDial({ open, origin, onClose, onDial }: Props) {
                 <path
                   d={wheelPath}
                   fillRule="evenodd"
-                  fill="url(#dial-chrome)"
-                  stroke="#6f7378"
+                  fill="#d9d6ce"
+                  stroke="#8d8f92"
                   strokeWidth="2"
-                  style={{ filter: "drop-shadow(0 4px 4px rgba(0,0,0,0.45))" }}
+                  style={{ filter: "drop-shadow(0 4px 0 rgba(21,22,42,0.45))" }}
                 />
                 {DIGITS.map((digit) => {
                   const { x, y } = at(holeAngle(digit), HOLE_RING);
@@ -312,13 +306,25 @@ export default function PhoneDial({ open, origin, onClose, onDial }: Props) {
                 >
                   {line.digit}
                 </span>
-                <span>
+                <span className="min-w-0 flex-1">
                   <span className="block font-bold">
                     <span className="sr-only">{line.digit}: </span>
                     {line.name}
                   </span>
                   <span className="block text-xs text-[#151515]/65">{line.detail}</span>
                 </span>
+                {/* Dialling 0 opens the CV to read once the wheel has come
+                    back round; this saves a copy at once, which a phone's
+                    built-in PDF viewer doesn't make obvious. */}
+                {line.digit === 0 && (
+                  <a
+                    href={site.cv}
+                    download={CV_FILENAME}
+                    className="shrink-0 rounded-full bg-[#151515] px-3 py-1.5 text-xs text-[#f6f3ea] transition-colors hover:bg-[#d4312a] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#ffd200]"
+                  >
+                    Download<span className="sr-only"> my CV as a PDF</span>
+                  </a>
+                )}
               </li>
             ))}
           </ul>

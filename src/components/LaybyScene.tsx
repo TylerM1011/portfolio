@@ -37,7 +37,7 @@ const fallbackSign = {
   width: `${art.width + 0.8}em`,
   height: `${art.height + 0.8}em`,
 };
-// Without WebGL, the marker sign stands in for the phone, middle right.
+// Without WebGL, a flat drawing of the phone stands in for it, middle right.
 const fallbackPhone = {
   left: "62%",
   bottom: "9rem",
@@ -123,12 +123,9 @@ export default function LaybyScene() {
     <>
       <div
         ref={containerRef}
-        className="layby-scene pointer-events-none fixed inset-0 overflow-hidden bg-linear-to-b from-[#4f8fcf] via-[#f2dfbf] via-55% to-[#8f936a] dark:from-[#1c1f4d] dark:via-[#f08a5d] dark:to-[#3b3a3a]"
+        className="layby-scene pointer-events-none fixed inset-0 overflow-hidden bg-linear-to-b from-(--sky-top) via-(--sky-horizon) via-55% to-[#8f936a] dark:to-[#3b3a3a]"
       >
         <div ref={stageRef} aria-hidden className="absolute inset-0" />
-        {/* A scrim keeps the footer legible over the verge. It stays put
-            whether the footer is up or not, so the page looks the same. */}
-        <div aria-hidden className="absolute inset-x-0 bottom-0 h-48 bg-linear-to-t from-background/75 to-transparent" />
 
         <div className="absolute inset-0 overflow-hidden">
           <div ref={cameraRef} className="absolute top-0 left-0 h-full w-full transform-3d">

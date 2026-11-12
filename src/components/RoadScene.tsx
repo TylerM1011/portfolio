@@ -132,7 +132,7 @@ export default function RoadScene() {
   return (
     <div
       ref={containerRef}
-      className="road-scene absolute inset-0 isolate overflow-hidden bg-linear-to-b from-[#4f8fcf] to-[#f2dfbf] dark:from-[#1c1f4d] dark:to-[#f08a5d]"
+      className="road-scene absolute inset-0 isolate overflow-hidden bg-linear-to-b from-(--sky-top) to-(--sky-horizon)"
     >
       <div ref={stageRef} aria-hidden className="absolute inset-0" />
 
@@ -174,12 +174,7 @@ export default function RoadScene() {
         </div>
       </div>
 
-      {/* The scene runs on behind the site footer, as on the projects page;
-          a scrim keeps the footer legible over the road. It stays put
-          whether the footer is up or not, so the page looks the same. */}
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-linear-to-t from-background/75 to-transparent" />
-
-      <div ref={fadeRef} className="pointer-events-none absolute inset-0 bg-black opacity-0" />
+      <div ref={fadeRef} className="pointer-events-none absolute inset-0 bg-[#15162a] opacity-0" />
     </div>
   );
 }
