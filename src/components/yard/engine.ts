@@ -94,7 +94,14 @@ export function createYardEngine(el: YardElements, options: YardOptions): YardEn
     el.camera.style.height = `${height}px`;
     placeSign();
   }
-  const resizer = new ResizeObserver(resize);
+  // Resizing the canvas clears it, and the observer runs after this
+  // frame's draw, so resizing there would show a blank frame. Only note it
+  // here and resize at the start of the next draw; until then the browser
+  // stretches the last frame.
+  let resized = false;
+  const resizer = new ResizeObserver(() => {
+    resized = true;
+  });
   resizer.observe(el.container);
   resize();
 
@@ -123,6 +130,10 @@ export function createYardEngine(el: YardElements, options: YardOptions): YardEn
     if (!loaded) {
       last = now;
       return;
+    }
+    if (resized) {
+      resized = false;
+      resize();
     }
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;

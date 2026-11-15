@@ -135,7 +135,14 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
     el.camera.style.width = `${width}px`;
     el.camera.style.height = `${height}px`;
   }
-  const resizer = new ResizeObserver(resize);
+  // Resizing the canvas clears it, and the observer runs after this
+  // frame's draw, so resizing there would show a blank frame. Only note it
+  // here and resize at the start of the next draw; until then the browser
+  // stretches the last frame.
+  let resized = false;
+  const resizer = new ResizeObserver(() => {
+    resized = true;
+  });
   resizer.observe(el.container);
   resize();
 
@@ -202,6 +209,10 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
     if (!onScreen || !loaded) {
       last = now;
       return;
+    }
+    if (resized) {
+      resized = false;
+      resize();
     }
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;

@@ -71,9 +71,13 @@ export function createStage<P extends Palette, W extends StageWorld<P>>(
   const size = { width: 1, height: 1 };
   // Fits the canvas to the container; the engine then sets its lens.
   function resize() {
-    size.width = Math.max(1, el.container.clientWidth);
-    size.height = Math.max(1, el.container.clientHeight);
-    const ratio = Math.min(window.devicePixelRatio, size.width < COMPACT_WIDTH ? 1.5 : 1.75);
+    const width = Math.max(1, el.container.clientWidth);
+    const height = Math.max(1, el.container.clientHeight);
+    const ratio = Math.min(window.devicePixelRatio, width < COMPACT_WIDTH ? 1.5 : 1.75);
+    // Unchanged: keep the buffers rather than clear and reallocate them.
+    if (width === size.width && height === size.height && ratio === renderer.getPixelRatio()) return size;
+    size.width = width;
+    size.height = height;
     renderer.setPixelRatio(ratio);
     renderer.setSize(size.width, size.height, false);
     composer.setPixelRatio(ratio);
