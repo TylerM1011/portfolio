@@ -47,14 +47,15 @@ export function stackSheets(open: boolean) {
   if (!open) {
     list.removeAttribute("data-stacked");
     list.inert = false;
-    // Once every sheet is home, the phones' sideways strip scrolls again,
+    // Once every sheet is home, the phones' scrolling list scrolls again,
     // exactly where it was (see below).
     const settle = () => {
       if (list.hasAttribute("data-stacked")) return;
-      const scroll = Number(list.dataset.scroll ?? 0);
+      const [left = 0, top = 0] = (list.dataset.scroll ?? "").split(" ").map(Number);
       list.style.translate = "";
       list.removeAttribute("data-lifted");
-      list.scrollLeft = scroll;
+      list.scrollLeft = left;
+      list.scrollTop = top;
     };
     const moving = sheets.flatMap((sheet) => sheet.getAnimations().filter((a) => a instanceof CSSTransition));
     if (moving.length) void Promise.allSettled(moving.map((a) => a.finished)).then(settle);
@@ -68,12 +69,14 @@ export function stackSheets(open: boolean) {
   function gather() {
     // Sheets still falling in land at once, so none is caught halfway.
     for (const animation of list!.getAnimations({ subtree: true })) if (!(animation instanceof CSSTransition)) animation.finish();
-    // On phones the sheets lie in a sideways-scrolling strip that would clip
-    // them on their way down to the pile. It stops clipping while they are
-    // away, and is shifted by its scroll so nothing moves when it does.
+    // On phones the sheets lie in a scrolling list (a column, or a row on a
+    // phone on its side) that would clip them on their way to the pile. It
+    // stops clipping while they are away, and is shifted by its scroll so
+    // nothing moves when it does.
     if (!list!.hasAttribute("data-lifted")) {
-      list!.dataset.scroll = String(list!.scrollLeft);
-      list!.style.translate = `${-list!.scrollLeft}px 0`;
+      const { scrollLeft: left, scrollTop: top } = list!;
+      list!.dataset.scroll = `${left} ${top}`;
+      list!.style.translate = `${-left}px ${-top}px`;
       list!.setAttribute("data-lifted", "");
     }
     const target = layoutRect(housing!);
@@ -85,7 +88,9 @@ export function stackSheets(open: boolean) {
     // set on a sheet move it by this much on screen.
     const zoom = list!.getBoundingClientRect().width / parseFloat(getComputedStyle(list!).width) || 1;
     sheets.forEach((sheet, i) => {
-      const rect = sheet.getBoundingClientRect();
+      // Measured by its card, which on phones is pinned in place away from
+      // its slot in the list (see BlueprintList); elsewhere they coincide.
+      const rect = (sheet.querySelector<HTMLElement>(".blueprint-card") ?? sheet).getBoundingClientRect();
       const style = getComputedStyle(sheet);
       // Where the sheet rests, without any travel it is part-way through.
       const [tx, ty] = translation(style.translate);

@@ -211,8 +211,8 @@ export function createPhone({ post }: { post: THREE.Material }) {
     door.rotation.y = state.open * 1.9;
     phone.position.set(handsetRest.x + state.lift * 0.04, handsetRest.y + state.lift * 0.05, handsetRest.z + state.lift * 0.16);
     phone.rotation.set(state.lift * 0.5, 0, state.lift * -0.6);
-    box.rotation.z = Math.sin(time * 55) * 0.018 * state.ring;
-    box.position.x = Math.sin(time * 47) * 0.003 * state.ring;
+    box.rotation.z = Math.sin(time * 26) * 0.018 * state.ring;
+    box.position.x = Math.sin(time * 22) * 0.003 * state.ring;
   }
 
   return { group, box, bounds, update };
@@ -220,8 +220,8 @@ export function createPhone({ post }: { post: THREE.Material }) {
 
 // The phone rings for this long every RING_EVERY seconds, until the visitor
 // has had a go at it. The door stays open this long after a call.
-const RING_EVERY = 7;
-const RING_FOR = 1.1;
+const RING_EVERY = 4;
+const RING_FOR = 1.6;
 const CALL_HOLD = 6;
 // Picking up the phone, the camera pushes in on the open box until it fills
 // about this much of the screen's height. The push takes about a second.
@@ -244,13 +244,14 @@ export function createPhoneRig(phone: Phone, { element, reducedMotion }: { eleme
   let hovering = false;
   let used = false;
   let dialOpen = false;
+  let wasRinging = false;
   let calledAt = -Infinity;
   let zoom = 0;
   let speed = 0;
 
   // The button's stand-in drawing goes; the scene's phone shows through.
   const elementStyle = element.style.cssText;
-  const art = element.querySelector("svg");
+  const art = element.querySelector<SVGSVGElement>(":scope > svg");
   Object.assign(element.style, { left: "0", top: "0", right: "auto", bottom: "auto", transform: "none", aspectRatio: "auto" });
   element.setAttribute("data-modelled", "");
   art?.style.setProperty("visibility", "hidden");
@@ -291,6 +292,8 @@ export function createPhoneRig(phone: Phone, { element, reducedMotion }: { eleme
       state.lift = approach(state.lift, calling && state.open > 0.7 ? 1 : 0, 6 * instant, dt);
       state.ring = approach(state.ring, ringing ? 1 : 0, 18, dt);
       phone.update(time, state);
+      // The ring marks above the box (see .phone-ring in globals.css).
+      if (ringing !== wasRinging) element.toggleAttribute("data-ringing", (wasRinging = ringing));
 
       const from = zoom;
       zoom = approach(zoom, dialOpen ? 1 : 0, ZOOM_RATE * instant, dt);
@@ -340,6 +343,7 @@ export function createPhoneRig(phone: Phone, { element, reducedMotion }: { eleme
     dispose() {
       element.style.cssText = elementStyle;
       element.removeAttribute("data-modelled");
+      element.removeAttribute("data-ringing");
       art?.style.removeProperty("visibility");
     },
   };

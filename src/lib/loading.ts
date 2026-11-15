@@ -2,7 +2,8 @@
 // the middle. It covers the page whenever anything holds it, and lifts once
 // nothing does:
 //
-// - the first load holds it until the sign font and every page's code are in;
+// - the first load holds it until the sign font and every page's code are in,
+//   and the page's scene (if it has one) has mounted and taken its own hold;
 // - a page with a 3D scene holds it until the scene's first frame is drawn,
 //   so its sky gradient is never seen on its own;
 // - leaving a page through its signs holds it from the fade out until the
@@ -52,6 +53,25 @@ function settle() {
   if (holds > 0 || !covered) return;
   covered = false;
   screen?.lift();
+}
+
+// A scene's container carries this attribute in the server's HTML, and the
+// scene removes it in the same layout effect that takes its hold. While it is
+// on the page, a scene is there but hasn't mounted yet: React hydrates the
+// page after the root layout, sometimes several tasks later (long enough to
+// see on slower machines), so without this the first load's hold could let
+// go in that gap and the screen would start to lift, then snap back.
+export const SCENE_PENDING = "data-scene-pending";
+
+// Resolves once no scene on the page is waiting to mount.
+export function scenesMounted() {
+  return new Promise<void>((resolve) => {
+    const check = () => {
+      if (document.querySelector(`[${SCENE_PENDING}]`)) requestAnimationFrame(check);
+      else resolve();
+    };
+    check();
+  });
 }
 
 // For LoadingScreen, once mounted.

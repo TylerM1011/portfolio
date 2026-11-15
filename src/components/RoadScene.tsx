@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useLayoutEffect, useRef, useState, type MouseEvent } from "react";
-import { holdScreen } from "@/lib/loading";
+import { holdScreen, SCENE_PENDING } from "@/lib/loading";
 import { site } from "@/lib/site";
 import { createRoadEngine, type RoadEngine } from "./road/engine";
 import { fadeToPage } from "./LoadingScreen";
@@ -64,6 +64,7 @@ export default function RoadScene() {
     // The loading screen stays up until the first frame is drawn, so the
     // sky gradient behind the scene is never seen on its own.
     const release = holdScreen();
+    container.removeAttribute(SCENE_PENDING);
     const scheme = window.matchMedia("(prefers-color-scheme: dark)");
     let intro = false;
     try {
@@ -132,6 +133,8 @@ export default function RoadScene() {
   return (
     <div
       ref={containerRef}
+      // Until the scene mounts (see SCENE_PENDING).
+      data-scene-pending=""
       className="road-scene absolute inset-0 isolate overflow-hidden bg-linear-to-b from-(--sky-top) to-(--sky-horizon)"
     >
       <div ref={stageRef} aria-hidden className="absolute inset-0" />

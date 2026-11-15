@@ -17,6 +17,15 @@ const MAX_FOV = 72;
 // The signpost's HTML links are laid out in em, one stroke width (see
 // road/sign.ts), at 400px to a world unit, as on the road scene.
 const SIGN_PX_PER_UNIT = 400;
+// The signpost's panels are never drawn shorter than this on screen (about
+// their size on a laptop; see placeSign). To get there they come no nearer
+// the camera than NEAREST_SIGN, and never so near that the foot of the sign,
+// SIGN_FOOT up, drops out of the bottom of the shot.
+const MIN_SIGN_PX = 23;
+const NEAREST_SIGN = 3.5;
+const SIGN_FOOT = 0.2;
+// How far the camera looks down.
+const TILT = Math.atan2(EYE.y - LOOK.y, EYE.z - LOOK.z);
 
 export type YardElements = {
   container: HTMLElement;
@@ -76,10 +85,19 @@ export function createYardEngine(el: YardElements, options: YardOptions): YardEn
   // The phone's button is a plain box over the phone, refitted every frame.
   const phone = createPhoneRig(world.phone, { element: el.phone, reducedMotion: options.reducedMotion });
   // Out to the side, 70% of the way to the edge of the shot at its depth,
-  // clear of the sheets but still in view on narrow screens.
+  // clear of the sheets but still in view on narrow screens. On small
+  // screens (a phone, either way up) it would shrink to a few pixels, too
+  // small to read or tap, so it comes nearer the camera until its panels are
+  // MIN_SIGN_PX tall, or as near as it can come and stay in shot.
+  const panelsTall = (layout.top - layout.bottom) * SIGNPOST.scale;
   function placeSign() {
-    const reach = (EYE.z - SIGNPOST.z) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
-    world.placeSignpost(reach * 0.7);
+    const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
+    const tanHalf = Math.tan(halfFov);
+    const fit = (panelsTall * height) / (2 * tanHalf * MIN_SIGN_PX);
+    const nearest = Math.max(NEAREST_SIGN, (EYE.y - SIGN_FOOT) / Math.tan(halfFov + TILT));
+    const distance = THREE.MathUtils.clamp(fit, Math.min(nearest, EYE.z - SIGNPOST.z), EYE.z - SIGNPOST.z);
+    const reach = distance * tanHalf * camera.aspect;
+    world.placeSignpost(reach * 0.7, EYE.z - distance);
     signMatrix.multiplyMatrices(world.signpost.matrixWorld, signFrame);
     el.sign.style.transform = objectCSS(signMatrix);
   }

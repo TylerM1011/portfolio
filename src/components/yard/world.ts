@@ -1028,16 +1028,17 @@ export function buildYard({
   phone.group.scale.setScalar(PHONE.scale);
   scene.add(phone.group);
 
-  // Stands the signpost x across (capped at SIGNPOST.maxX), facing the
-  // camera, with the phone at its side. The phone turns a little
-  // further than square on, so it shows its side.
-  function placeSignpost(x: number) {
+  // Stands the signpost x across (capped at SIGNPOST.maxX) and z deep
+  // (SIGNPOST.z, or nearer the camera on small screens), facing the camera,
+  // with the phone at its side. The phone turns a little further than
+  // square on, so it shows its side.
+  function placeSignpost(x: number, z = SIGNPOST.z) {
     x = Math.min(x, SIGNPOST.maxX);
-    signpost.position.set(x, 0, SIGNPOST.z);
-    signpost.rotation.set(0, Math.atan2(EYE.x - x, EYE.z - SIGNPOST.z), 0);
+    signpost.position.set(x, 0, z);
+    signpost.rotation.set(0, Math.atan2(EYE.x - x, EYE.z - z), 0);
     signpost.updateMatrixWorld(true);
     const px = x + layout.left * SIGNPOST.scale - PHONE.gap;
-    const pz = SIGNPOST.z + PHONE.forward;
+    const pz = z + PHONE.forward;
     phone.group.position.set(px, DIRT_Y, pz);
     phone.group.rotation.set(0, Math.atan2(EYE.x - px, EYE.z - pz) + 0.35, 0);
     phone.group.updateMatrixWorld(true);

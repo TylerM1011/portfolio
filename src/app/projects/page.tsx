@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
 import Blueprint, { type Project } from "@/components/Blueprint";
+import BlueprintList from "@/components/BlueprintList";
 import YardScene from "@/components/YardScene";
 
 export const metadata: Metadata = {
@@ -23,7 +24,7 @@ const projects: Project[] = [
     drawing: "website",
   },
   {
-    name: "fuck roll 20",
+    name: "Goblin Party",
     description: "A Dungeons & Dragons virtual tabletop.",
     status: "Collaborated",
     stamp: "green",
@@ -34,8 +35,8 @@ const projects: Project[] = [
 
 // No site header here: the signpost by the gate (in YardScene) is the way
 // out. The page fits the screen and never scrolls: <main> takes the full
-// height (the footer slides up over it) and clips anything more (the sheets are sized to
-// fit, see globals.css). It is positioned so it paints over the fixed
+// height and clips anything more (the sheets are sized to fit, see
+// globals.css). It is positioned so it paints over the fixed
 // scene, and lets the pointer through to the signpost wherever there is no
 // sheet.
 export default function ProjectsPage() {
@@ -43,17 +44,21 @@ export default function ProjectsPage() {
     <>
       <YardScene />
       <main className="pointer-events-none relative flex min-h-0 flex-1 basis-0 flex-col overflow-hidden">
-        <section className="sm:mx-auto sm:w-full sm:max-w-4xl sm:px-6 sm:pt-16">
+        <section className="sm:mx-auto sm:w-full sm:max-w-4xl sm:px-6 sm:pt-16 [@media(min-width:640px)_and_(max-height:572px)]:pt-0">
           <h1 className="sr-only">Projects</h1>
           {/* Blueprints scattered across the site, one per project. */}
-          <ul className="blueprints">
+          <BlueprintList>
             {projects.map((project, index) => (
-              // --i staggers the sheets falling into place (see globals.css).
+              // --i staggers the sheets falling into place, and stacks them
+              // front to back on phones (see globals.css). The card is what
+              // turns in the phones' rolodex (see BlueprintList).
               <li key={project.name} className="blueprint-wrap" style={{ "--i": index } as CSSProperties}>
-                <Blueprint project={project} index={index} total={projects.length} />
+                <div className="blueprint-card">
+                  <Blueprint project={project} index={index} total={projects.length} />
+                </div>
               </li>
             ))}
-          </ul>
+          </BlueprintList>
         </section>
       </main>
     </>

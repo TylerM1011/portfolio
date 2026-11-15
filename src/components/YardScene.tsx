@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
-import { holdScreen } from "@/lib/loading";
+import { holdScreen, SCENE_PENDING } from "@/lib/loading";
 import { site } from "@/lib/site";
 import { PhoneButton, useEmergencyPhone } from "./EmergencyPhone";
 import { fadeToPage } from "./LoadingScreen";
@@ -81,6 +81,7 @@ export default function YardScene() {
     // The loading screen stays up until the scene's first frame is drawn,
     // so its gradient is never seen on its own (see lib/loading.ts).
     const release = holdScreen();
+    container.removeAttribute(SCENE_PENDING);
 
     const scheme = window.matchMedia("(prefers-color-scheme: dark)");
     const engine = createYardEngine(
@@ -130,6 +131,8 @@ export default function YardScene() {
     <>
       <div
         ref={containerRef}
+        // Until the scene mounts (see SCENE_PENDING).
+        data-scene-pending=""
         className="yard-scene pointer-events-none fixed inset-0 overflow-hidden bg-linear-to-b from-(--sky-top) via-(--sky-horizon) via-55% to-[#9a7652] dark:to-[#4a3828]"
       >
         <div ref={stageRef} aria-hidden className="absolute inset-0" />

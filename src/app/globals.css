@@ -14,9 +14,6 @@
   --land-far: #9db5a6;
   /* UK primary route green and its border, for signs drawn in HTML. */
   --sign: #00703c;
-  /* The footer's glass: the colour of the road at this time of day. */
-  --strip: rgb(30 27 23 / 0.62);
-  --strip-ink: #f3ece0;
 }
 
 @theme inline {
@@ -35,14 +32,12 @@
     --land: #4a5068;
     --land-far: #6a557e;
     --sign: #00653a;
-    --strip: rgb(18 18 38 / 0.62);
-    --strip-ink: #f1e6da;
   }
 }
 
-/* The scroll that slides the footer up (see FooterReveal) must not move
-   anything else: without this, macOS and iOS rubber-band the whole page,
-   scenes and all, when it is dragged past its end. */
+/* The pages fit the screen and don't scroll; without this, macOS and iOS
+   rubber-band the whole page, scenes and all, when it is dragged past its
+   end. */
 html,
 body {
   overscroll-behavior: none;
@@ -73,22 +68,27 @@ body {
 /* Projects page: blueprints scattered over a construction site. The site is
    a 3D scene (src/components/YardScene.tsx); each sheet is
    src/components/Blueprint.tsx. The page never scrolls: <main> is the
-   full screen height, and the sheets are sized to fit in it. */
+   full screen height, and the sheets are sized to fit in it (on phones,
+   the list of sheets scrolls within it instead). */
 
-/* Phones: too narrow to stack the sheets without scrolling, so they lie in
-   a row along the top that slides sideways. */
+/* Phones: too narrow to scatter the sheets, so they stand in a rolodex at
+   the top of the screen, clear of the signpost and phone below (see
+   yard/engine.ts). The list scrolls a card at a time; each card is pinned
+   in place and flips up and away over its top edge as the list scrolls on,
+   showing the next one waiting behind it. The cards' slots are the list's
+   height, and BlueprintList sets --p on each card from the scroll (see
+   .blueprint-card below). */
 .blueprints {
-  /* A sheet is about 1.2 times as wide as it is tall. */
-  --sheet: min(26rem, 80vw, calc((50dvh - 5rem) * 1.2));
+  --sheet: min(22rem, 84vw);
   display: flex;
-  justify-content: safe center;
-  gap: 2.5rem;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
+  flex-direction: column;
+  align-items: center;
+  height: min(64dvh, calc(var(--sheet) + 4rem));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-snap-type: y mandatory;
   scrollbar-width: none;
-  /* Room for the sheets' turn, shadow and lift on hover, which the sideways
-     scroll would otherwise clip. */
-  padding: 1.5rem 1.5rem 3.5rem;
 }
 
 .blueprints::-webkit-scrollbar {
@@ -102,11 +102,15 @@ body {
   .blueprints {
     --sheet: min(26rem, calc(50% - 1.25rem));
     max-width: 53rem;
+    height: auto;
     margin-inline: auto;
+    flex-direction: row;
     flex-wrap: wrap;
+    align-items: normal;
     justify-content: center;
     gap: 2.75rem 2.5rem;
     overflow: visible;
+    overscroll-behavior: auto;
     scroll-snap-type: none;
     padding: 1rem 0 3rem;
   }
@@ -116,8 +120,7 @@ body {
    narrower sheet would wrap and cut its title instead), so both rows still
    fit on screen. At full size the two rows and their padding stand about
    808px tall, under the 64px above them, with about 105px kept clear at
-   the bottom for the footer to slide up into:
-   each step is the largest scale that fits the shortest screen in its
+   the bottom: each step is the largest scale that fits the shortest screen in its
    range. */
 @media (min-width: 640px) and (max-height: 979px) {
   .blueprints {
@@ -146,6 +149,25 @@ body {
 @media (min-width: 640px) and (max-height: 653px) {
   .blueprints {
     zoom: 0.5;
+  }
+}
+
+/* Shorter still (a phone on its side), two rows would shrink past reading,
+   and a column would show one sheet at a time, so the sheets lie in a row
+   that slides sideways, with no padding above (see the projects page). They stop short of the bottom
+   third, which the signpost and phone stand in (see yard/engine.ts); this
+   narrow, a sheet is about as tall as it is wide. */
+@media (min-width: 640px) and (max-height: 572px) {
+  .blueprints {
+    --sheet: min(26rem, 80vw, calc(100dvh - 7rem));
+    zoom: 1;
+    max-width: none;
+    flex-wrap: nowrap;
+    justify-content: safe center;
+    gap: 2.5rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding: 1.5rem 1.5rem 3.5rem;
   }
 }
 
@@ -193,6 +215,77 @@ body {
     --turn: -2.4deg;
     --nudge-x: -0.5rem;
     --nudge-y: 1.5rem;
+  }
+}
+
+/* In the sliding row on short screens (above), the sheets lie in line. */
+@media (min-width: 640px) and (max-height: 572px) {
+  .blueprint-wrap:nth-child(n) {
+    --nudge-x: 0rem;
+    --nudge-y: 0rem;
+  }
+}
+
+/* The phones' rolodex (see .blueprints above). Each sheet has a slot the
+   list's height to snap to, one card per swipe, and stands square in it,
+   the first in front. The order holds on hover too: a sheet the pointer is
+   on is raised over its neighbours elsewhere (see .blueprint-wrap:hover),
+   which here would drop the card in front behind all the rest. */
+@media (max-width: 639px) {
+  .blueprints > .blueprint-wrap:nth-child(n) {
+    --turn: 0deg;
+    z-index: calc(100 - var(--i));
+    height: 100%;
+    padding-top: 1.25rem;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  /* --p (from BlueprintList) is where the card stands: 0 in front, rising
+     to 1 as it flips away, and -1, -2, ... while it waits that many cards
+     back. The card is pinned in place against the scroll (--stage is a
+     slot's height); waiting, it sits a step lower, smaller and in shadow,
+     its foot showing under the cards in front (two at most); in front, it
+     flips up over its top edge, toward the viewer, and fades as it goes
+     edge on. */
+  .blueprint-card {
+    --p: 0;
+    --back: clamp(0, -1 * var(--p), 3);
+    --gone: clamp(0, var(--p), 1);
+    transform-origin: 50% 0;
+    translate: 0 calc(var(--p) * var(--stage, 0px));
+    transform: perspective(70rem) translateY(calc(var(--back) * 1.5rem)) scale(calc(1 - var(--back) * 0.035))
+      rotateX(calc(var(--gone) * 92deg));
+    opacity: calc((1 - clamp(0, var(--back) - 2, 1)) * (1 - clamp(0, (var(--gone) - 0.7) * 3.4, 1)));
+    filter: brightness(calc(1 - var(--back) * 0.16));
+  }
+
+  /* Only the sheet in front (marked by BlueprintList) answers the pointer:
+     the cards' slots and frames let it through, as do the sheets waiting
+     behind, their feet showing, and the one flipping away, so none of them
+     lifts on hover or opens on a tap. The rolodex as a whole still takes
+     every scroll and swipe over it, gaps and all, rather than letting them
+     through to the site behind (nothing there to point at: the signpost
+     and phone stand below). */
+  .blueprints {
+    pointer-events: auto;
+  }
+
+  .blueprints > .blueprint-wrap {
+    pointer-events: none;
+  }
+
+  .blueprint-card:not([data-front]) .blueprint {
+    pointer-events: none;
+  }
+}
+
+/* Without motion, the cards cross-fade in place instead. */
+@media (max-width: 639px) and (prefers-reduced-motion: reduce) {
+  .blueprint-card {
+    transform: none;
+    opacity: calc(1 - max(var(--gone), clamp(0, -1 * var(--p), 1)));
+    filter: none;
   }
 }
 
@@ -294,7 +387,7 @@ body {
   pointer-events: none;
 }
 
-/* On phones, the sideways strip stops clipping while the sheets are away. */
+/* On phones, the scrolling list stops clipping while the sheets are away. */
 .blueprints[data-lifted] {
   overflow: visible;
 }
@@ -545,6 +638,20 @@ body:has(.loading-screen:not([data-state="hidden"])) .blueprint::after {
   white-space: nowrap;
 }
 
+/* On sheets narrower than the lettering was drawn for (on phones, either
+   way up), the project's name is set smaller and tighter, in step with the
+   sheet, so it still fits in full. */
+.blueprint-wrap {
+  container-type: inline-size;
+}
+
+@container (max-width: 22rem) {
+  .blueprint-name h2 {
+    font-size: 4.3cqi;
+    letter-spacing: 0.04em;
+  }
+}
+
 /* Rubber stamp across the drawing. */
 .blueprint-stamp {
   position: absolute;
@@ -607,6 +714,97 @@ body:has(.loading-screen:not([data-state="hidden"])) .blueprint::after {
 :is(.road-scene, .yard-scene) [data-modelled] :is(.road-sign > svg, .road-sign::after),
 .layby-scene [data-modelled] :is(.route-sign > svg, .route-sign-row::after) {
   visibility: hidden;
+}
+
+/* The yard's signpost panels are small; on touch screens their links reach
+   past each panel, invisibly, to a finger-sized target. In percentages, so
+   it scales with the sign wherever the scene draws it. */
+@media (pointer: coarse) {
+  .yard-scene .road-sign::before {
+    content: "";
+    position: absolute;
+    inset: -50% -15%;
+  }
+}
+
+/* The ring marks round the emergency phone: sound arcs pulsing out from
+   either side of the box while it rings. The rig sets data-ringing (see
+   road/phone.ts); the stand-in drawing, with no rig, rings on the rig's own
+   cycle: 1.6s in every 4. */
+.phone-ring {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 170%;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-50%) scale(0.9);
+  filter: drop-shadow(0 1px 1px rgb(21 22 42 / 0.55));
+  transition:
+    opacity 200ms ease,
+    transform 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.phone-ring svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.emergency-phone[data-ringing] .phone-ring {
+  opacity: 1;
+  transform: translateX(-50%);
+}
+
+/* The stand-in drawing includes the post: the arcs go round the box at
+   its top. */
+.emergency-phone:not([data-modelled]) .phone-ring {
+  bottom: auto;
+  height: 46%;
+  animation: phone-ring-cycle 4s infinite;
+}
+
+.emergency-phone:not([data-modelled]):is(:hover, :focus-visible, [aria-expanded="true"]) .phone-ring {
+  animation: none;
+}
+
+.phone-ring-arc {
+  animation: phone-ring-pulse 1400ms ease-out infinite;
+}
+
+.phone-ring-arc-outer {
+  animation-delay: 350ms;
+}
+
+@keyframes phone-ring-pulse {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  35% {
+    opacity: 1;
+  }
+}
+
+@keyframes phone-ring-cycle {
+  0%,
+  40% {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+  44%,
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phone-ring {
+    display: none;
+  }
 }
 
 /* The phone's dial (PhoneDial). Hidden, it lets the pointer through to the

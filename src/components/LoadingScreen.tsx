@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, type CSSProperties } from "react";
-import { connectScreen, holdScreen } from "@/lib/loading";
+import { connectScreen, holdScreen, scenesMounted } from "@/lib/loading";
 import { site } from "@/lib/site";
 import { signFont } from "./road/font";
 
@@ -64,6 +64,7 @@ export default function LoadingScreen() {
     void Promise.all([
       document.fonts.load(`1em ${signFont.style.fontFamily}`).catch(() => {}),
       document.fonts.ready,
+      scenesMounted(),
     ]).then(release);
     return release;
     // Only ever once: the root layout lives for the whole visit.

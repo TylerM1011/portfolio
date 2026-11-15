@@ -80,6 +80,17 @@ export function PhoneButton({ ref, open, onPickUp, onHover, fallback }: ButtonPr
         </text>
         <rect x="13" y="34" width="3" height="10" fill="#2b2b2b" />
       </svg>
+      {/* Ring marks: sound arcs either side of the box, shown while the
+          phone rings (data-ringing, set by the rig in
+          road/phone.ts; on a timer for the stand-in drawing). */}
+      <span aria-hidden className="phone-ring">
+        {/* The box fills the middle 100 units across; the arcs, centred
+            on it, bow out past its sides. */}
+        <svg viewBox="0 0 170 100" fill="none" stroke="#f7f4ec" strokeWidth="5" strokeLinecap="round">
+          <path className="phone-ring-arc" d="M31.3 19 A62 62 0 0 0 31.3 81 M138.7 19 A62 62 0 0 1 138.7 81" />
+          <path className="phone-ring-arc phone-ring-arc-outer" d="M19.2 12 A76 76 0 0 0 19.2 88 M150.8 12 A76 76 0 0 1 150.8 88" />
+        </svg>
+      </span>
     </button>
   );
 }
