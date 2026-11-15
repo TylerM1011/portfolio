@@ -34,7 +34,7 @@ const LANE_SHIFT = ROAD.lane;
 const CAR_TRAVEL = 48;
 const CAM_TRAVEL = 20;
 
-// Left pulls into the lay-by: the car signals, drifts across the hard strip
+// Left pulls into the lay-by: the car drifts across the hard strip
 // into it and brakes to a stop, while the camera eases forward to watch.
 const LAYBY_MS = 4200;
 const LAYBY = ROAD.layby;
@@ -308,10 +308,6 @@ export function createRoadEngine(el: RoadElements, options: RoadOptions): RoadEn
     camera.updateMatrixWorld();
 
     world.sign.setHighlight(drive?.lateral ?? hint, !!drive);
-    const signal = drive?.lateral ?? hint ?? 0;
-    const blink = signal !== 0 && Math.floor(time * 2.6) % 2 === 0;
-    car.blinkers[0].visible = blink && signal < 0;
-    car.blinkers[1].visible = blink && signal > 0;
 
     // Keep the shadow map centered just ahead of the camera.
     focus.set(eye.x, 0, eye.z - 8);

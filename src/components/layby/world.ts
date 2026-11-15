@@ -247,12 +247,9 @@ export function buildLayby({
   });
   atmosphere.aimSun(new THREE.Vector3(-3, 0, EYE.z));
 
-  // The car from the home page, pulled in, side on to the camera, hazards
-  // on.
+  // The car from the home page, pulled in, side on to the camera.
   const parked = createCar();
   parked.group.position.set(ROAD.layby.x, 0, PARKED_Z);
-  // The flashers are sized for the home page's view from well behind.
-  for (const blinker of parked.blinkers) blinker.scale.setScalar(0.06);
   scene.add(parked.group);
 
   function apply(p: Palette) {
@@ -271,15 +268,6 @@ export function buildLayby({
     parked.applyPalette({ ...p, headlights: 0 });
   }
 
-  function update(time: number) {
-    // Hazard lights, about 90 flashes a minute. Only the near side's: from
-    // here the far lamp is round the car's rear corner, so its glow would
-    // hang in the air past the bodywork.
-    const [far, near] = parked.blinkers;
-    far.visible = false;
-    near.visible = Math.floor(time * 3) % 2 === 0;
-  }
-
   const ready = Promise.allSettled([parked.ready, forest.ready, sign.ready]);
 
   function dispose() {
@@ -287,5 +275,5 @@ export function buildLayby({
     forest.dispose();
   }
 
-  return { scene, atmosphere, ready, car: parked, apply, update, sign, phone, dispose };
+  return { scene, atmosphere, ready, car: parked, apply, sign, phone, dispose };
 }

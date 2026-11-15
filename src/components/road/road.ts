@@ -3,7 +3,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { extendShader, foreground, ink, type Ink } from "../scene/style";
 
 // A British rural dual carriageway (A-road), built to UK dimensions at 0.44
-// world units per metre (the car is a true-scale Polo). Traffic keeps left:
+// world units per metre (the car is sized to it by its width). Traffic keeps left:
 // the car starts in the left lane on x = 0 heading down -z, with the
 // overtaking lane to its right, then a grassed central reservation with a
 // steel barrier, then the opposite carriageway. A lay-by opens off the

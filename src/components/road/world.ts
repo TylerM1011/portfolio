@@ -11,7 +11,7 @@ import { createGantrySign, panelArt, SW, type GantryPanel, type SignItem } from 
 import { day, dusk, type Palette } from "./palette";
 
 // World units: the eye sits about 1 unit above the road and a metre is 0.44
-// units (the car is a true-scale Polo). x is lateral, y is height, and the
+// units (the car is sized to it by its width). x is lateral, y is height, and the
 // road runs away from the camera down -z. The road is a British dual
 // carriageway (see road.ts): the car starts in the left lane on x = 0, the
 // overtaking lane is to its right, and a side road joins from the left.

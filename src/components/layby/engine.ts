@@ -153,8 +153,6 @@ export function createLaybyEngine(el: LaybyElements, options: LaybyOptions): Lay
     camera.lookAt(look);
     camera.updateMatrixWorld();
 
-    world.update(time);
-
     world.sign.setHighlight(leaving ?? hint, !!leaving);
 
     grade.uBlur.value = phone.blur;
