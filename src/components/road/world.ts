@@ -1,12 +1,13 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { createLaybyProps } from "../layby/props";
 import { createAtmosphere } from "../scene/atmosphere";
 import { ink } from "../scene/style";
 import { groundTexture, rng } from "../scene/util";
 import { createCar } from "./car";
 import { createForest } from "./forest";
 import { createMeadow } from "./meadow";
-import { createRoad, ROAD, wildness } from "./road";
+import { createRoad, mowVerges, ROAD, wildness } from "./road";
 import { createGantrySign, panelArt, SW, type GantryPanel, type SignItem } from "./sign";
 import { day, dusk, type Palette } from "./palette";
 
@@ -15,7 +16,7 @@ import { day, dusk, type Palette } from "./palette";
 // road runs away from the camera down -z. The road is a British dual
 // carriageway (see road.ts): the car starts in the left lane on x = 0, the
 // overtaking lane is to its right, and a side road joins from the left.
-// The verges sit just below the asphalt.
+// The meadow ground sits just below the asphalt.
 const GROUND_Y = -0.02;
 
 export const GANTRY_Z = -3;
@@ -108,8 +109,17 @@ export function buildWorld({
   ground.receiveShadow = true;
   scene.add(ground);
 
+  // The mown verges are painted into the ground (see road.ts).
+  mowVerges(mats.ground);
   const road = createRoad({ anisotropy });
   scene.add(road.group);
+
+  // The contact page's props, on the lay-by's verge down past the gantry:
+  // scenery here, with nothing laid over them to click (see
+  // layby/props.ts). Their own seed keeps them as the contact page draws
+  // them, and leaves this scene's layout as it was.
+  const laybyProps = createLaybyProps({ rand: rng(31), groundY: GROUND_Y, font, anisotropy, post: mats.gantry });
+  scene.add(laybyProps.group);
 
   // The meadow on the verges and out either side (see meadow.ts).
   const meadow = createMeadow({
@@ -117,6 +127,9 @@ export function buildWorld({
     rand,
     groundY: GROUND_Y,
     area: { x: [-18, 24], z: [8, -60] },
+    // Not cleared round the lay-by's props: too far off here to see a tuft
+    // at their feet, and skipping them would reshuffle the rand() that lays
+    // out the grass and the trees after it.
     clear: (x, z) => road.isPaved(x, z, 0.06),
     wildness,
     wind,
@@ -229,15 +242,16 @@ export function buildWorld({
     atmosphere.apply(p);
     mats.ground.color.set(p.meadow);
     meadow.setColor(p.meadow);
-    road.setMeadow(p.meadow);
     road.setStuds(p.studs);
     mats.gantry.color.set(p.gantry);
     signs.setColors(p.sign, p.signGlow);
+    // As on the contact page: lit from the front, its sheeting needs little help.
+    laybyProps.sign.setColors(p.sign, p.signGlow * 0.3);
     car.applyPalette(p);
   }
 
   // Everything loaded asynchronously, settled (loaded or failed).
-  const ready = Promise.allSettled([car.ready, forest.ready, signs.ready]);
+  const ready = Promise.allSettled([car.ready, forest.ready, signs.ready, laybyProps.ready]);
 
   function dispose() {
     car.dispose();

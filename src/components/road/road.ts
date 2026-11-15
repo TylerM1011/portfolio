@@ -61,6 +61,35 @@ export function wildness(x: number) {
   return 0;
 }
 
+// Mows the verges into the meadow ground: a slightly paler, warmer band
+// along each carriageway, painted into the ground's own texture and
+// feathered at its edges, so the grass reads as one field.
+export function mowVerges(ground: Ink) {
+  const tint = new THREE.Color(0xffffff).lerp(new THREE.Color(0xf2e6a6), 0.35).multiplyScalar(1.07);
+  const feather = 0.45;
+  const bands = ROAD.verges
+    .map(
+      ([left, right]) =>
+        `mown = max(mown, smoothstep(${(left - feather).toFixed(3)}, ${(left + feather).toFixed(3)}, vVergePlan.x) * (1.0 - smoothstep(${(right - feather).toFixed(3)}, ${(right + feather).toFixed(3)}, vVergePlan.x)));`,
+    )
+    .join("\n");
+  extendShader(ground, "mown-verges", (shader) => {
+    shader.uniforms.uVergeTint = { value: tint };
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec2 vVergePlan;")
+      .replace("#include <fog_vertex>", "#include <fog_vertex>\nvVergePlan = (modelMatrix * vec4(transformed, 1.0)).xz;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform vec3 uVergeTint;\nvarying vec2 vVergePlan;")
+      .replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>
+        float mown = 0.0;
+        ${bands}
+        diffuseColor.rgb *= mix(vec3(1.0), uVergeTint, mown);`,
+      );
+  });
+}
+
 // UK markings, in metres: edge lines are solid (broken 1 m / 1 m across a
 // lay-by), and lane lines are 2 m marks with 7 m gaps.
 const EDGE_WIDTH = 0.15 * M;
@@ -207,25 +236,16 @@ export function createRoad({ anisotropy }: { anisotropy: number }) {
   // The asphalt is one flat ink, varied only by broad weathering and the
   // polished wheel paths (see weather): no aggregate, no relief.
   const patches = patchTexture(anisotropy);
+  // No polygon offset pushing the asphalt back: at the grazing angles down
+  // the road it would push it behind the meadow ground below it, which
+  // then shows through in the distance. What lies on the asphalt is pulled
+  // forward instead.
   const surface = (axis: "x" | "z", lanes: number[]) => {
-    const material = ink({
-      color: ASPHALT,
-      polygonOffset: true,
-      polygonOffsetFactor: 1,
-      polygonOffsetUnits: 1,
-    });
+    const material = ink({ color: ASPHALT });
     weather(material, patches, axis, lanes);
     return foreground(material, 0.14, 1.5, 9);
   };
-  const paint = ink({ color: 0xeeebe2 });
-  // The mown verges: a paler band of short grass along each carriageway,
-  // just under the asphalt (the meadow ground is a little lower still).
-  const verge = ink();
-  for (const [left, right] of ROAD.verges) {
-    const strip = new THREE.Mesh(onRoad(rect(left, NEAR, right, FAR), -0.012), verge);
-    strip.receiveShadow = true;
-    group.add(strip);
-  }
+  const paint = ink({ color: 0xeeebe2, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
   // Wheel paths in both lanes each way, and in the lay-by.
   const mainSurface = surface("x", [
     ROAD.layby.x,
@@ -456,10 +476,6 @@ export function createRoad({ anisotropy }: { anisotropy: number }) {
       if (x > RESERVATION[1] - margin && x < ONCOMING_SHOULDER + margin) return true;
       if (Math.abs(x - BARRIER_X) < 0.12 + margin) return true;
       return x < NEAR_SHOULDER + margin && x > LAYBY_BACK - kerbWidth - margin && z < LAYBY.entry + margin && z > LAYBY.exit - margin;
-    },
-    // The verges take the meadow's green, mown paler.
-    setMeadow(meadow: number) {
-      verge.color.set(meadow).multiplyScalar(1.12).lerp(new THREE.Color(0xd8cf8a), 0.12);
     },
     // Retroreflective studs glow when the light is low.
     setStuds(intensity: number) {

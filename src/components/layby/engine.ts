@@ -5,7 +5,6 @@ import { createPhoneRig } from "../road/phone";
 import { SW } from "../road/sign";
 import { GRADE } from "../scene/post";
 import { createStage } from "../scene/stage";
-import type { RouteSignArt } from "./sign";
 import { buildLayby, EYE, LOOK } from "./world";
 
 // The lay-by is a backdrop, so the camera only drifts. The lens keeps about
@@ -28,7 +27,7 @@ export type LaybyElements = {
 export type LaybyOptions = {
   dark: boolean;
   reducedMotion: boolean;
-  sign: { font: string; art: RouteSignArt };
+  sign: { font: string };
   // Called once the first frame is on screen.
   onReady?: () => void;
 };
@@ -57,7 +56,7 @@ const SLIDE = 1.8;
 
 export function createLaybyEngine(el: LaybyElements, options: LaybyOptions): LaybyEngine | null {
   const stage = createStage(el, {
-    build: ({ anisotropy, detail }) => buildLayby({ anisotropy, detail, routeSign: options.sign.art, font: options.sign.font }),
+    build: ({ anisotropy, detail }) => buildLayby({ anisotropy, detail, font: options.sign.font }),
     palettes: { day, dusk },
     dark: options.dark,
     fov: fitFov(16 / 9),

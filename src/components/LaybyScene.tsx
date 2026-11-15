@@ -3,25 +3,15 @@
 import Link from "next/link";
 import { useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { holdScreen, SCENE_PENDING } from "@/lib/loading";
-import { site } from "@/lib/site";
 import { PhoneButton, useEmergencyPhone } from "./EmergencyPhone";
 import { fadeToPage } from "./LoadingScreen";
 import PhoneDial from "./PhoneDial";
 import { createLaybyEngine, type LaybyEngine } from "./layby/engine";
-import { routeSignArt } from "./layby/sign";
+import { routeSign } from "./layby/props";
 import { signFont } from "./road/font";
 import { BORDER, LAYBY_BLUE, LEGEND_FONT_SIZE, ROUTE_YELLOW } from "./road/sign";
 
-// The page's navigation is a route confirmation sign on the bank, like
-// those just past a junction on an A-road: a route number, then everywhere
-// but here, top to bottom. Change the route number freely.
-const ROUTE = "T1";
-const routeSign = routeSignArt(
-  ROUTE,
-  site.nav
-    .filter((item) => item.href !== "/contact")
-    .map((item) => ({ item })),
-);
+// The page's navigation is the route sign on the bank (see layby/props.ts).
 const { art } = routeSign;
 
 // As on the projects page, the scene paints the sign and the HTML sign,
@@ -82,7 +72,7 @@ export default function LaybyScene() {
       {
         dark: scheme.matches,
         reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-        sign: { font: signFont.style.fontFamily, art: routeSign },
+        sign: { font: signFont.style.fontFamily },
         onReady: release,
       },
     );

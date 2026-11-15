@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { ink } from "../scene/style";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { ROAD } from "./road";
-import { canvasTexture, matte } from "./world";
+import { canvasTexture, matte } from "../scene/util";
 
 // The roadside emergency telephone, shared by the lay-by (contact page) and
 // the yard (projects page): the model, and the rig that makes it behave.
