@@ -1,37 +1,13 @@
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
-import Blueprint, { type Project } from "@/components/Blueprint";
+import Blueprint from "@/components/Blueprint";
 import BlueprintList from "@/components/BlueprintList";
 import YardScene from "@/components/YardScene";
+import { projects } from "@/lib/projects";
 
 export const metadata: Metadata = {
   title: "Projects",
 };
-
-const projects: Project[] = [
-  {
-    name: "Fraudible",
-    description: "A free audiobook app.",
-    status: "Under construction",
-    href: "https://github.com/TylerM1011/Fraudible",
-    drawing: "library",
-  },
-  {
-    name: "Portfolio",
-    description: "This website, built with Next.js and three.js.",
-    status: "Under construction",
-    href: "https://github.com/TylerM1011/Portfolio",
-    drawing: "website",
-  },
-  {
-    name: "Goblin Party",
-    description: "A Dungeons & Dragons virtual tabletop.",
-    status: "Collaborated",
-    stamp: "green",
-    href: "https://fuck-roll-20.winkwonk.workers.dev/",
-    drawing: "dice",
-  },
-];
 
 // No site header here: the signpost by the gate (in YardScene) is the way
 // out. The page fits the screen and never scrolls: <main> takes the full

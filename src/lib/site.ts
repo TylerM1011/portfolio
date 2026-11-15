@@ -10,8 +10,11 @@ export const site = {
   nav: [
     { href: "/", label: "Home" },
     // Order matters: on the home page's gantry the first destination after
-    // Home is the lay-by turn-off, which leads to the contact page.
+    // Home is the lay-by turn-off, which leads to the contact page; the rest
+    // take the lanes left to right (Projects straight on, About in the
+    // overtaking lane).
     { href: "/contact", label: "Contact" },
     { href: "/projects", label: "Projects" },
+    { href: "/about", label: "About" },
   ],
 } as const;

@@ -753,7 +753,11 @@ body:has(.loading-screen:not([data-state="hidden"])) .blueprint::after {
   overflow: visible;
 }
 
-.emergency-phone[data-ringing] .phone-ring {
+/* The about page's keys borrow them as short jingle marks
+   (data-jingling, set by about/engine.ts). */
+.emergency-phone[data-ringing] .phone-ring,
+.about-spot[data-ringing] .phone-ring,
+.about-spot[data-jingling] .phone-ring {
   opacity: 1;
   transform: translateX(-50%);
 }
@@ -776,6 +780,62 @@ body:has(.loading-screen:not([data-state="hidden"])) .blueprint::after {
 
 .phone-ring-arc-outer {
   animation-delay: 350ms;
+}
+
+/* The keys' jingle: each side's marks shake outward and back, out of step
+   with each other, and three glints twinkle round the bunch in turn
+   (AboutScene.tsx). */
+.key-jingle-left,
+.key-jingle-right {
+  transform-box: fill-box;
+  animation:
+    phone-ring-pulse 1400ms ease-out infinite,
+    key-jingle-shake 220ms ease-in-out infinite alternate;
+}
+
+.key-jingle-left {
+  --shake: -4px;
+}
+
+.key-jingle-right {
+  --shake: 4px;
+  animation-delay: 0ms, 110ms;
+}
+
+.key-glint {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+  animation: key-glint 900ms ease-in-out infinite;
+}
+
+.key-glint-2 {
+  animation-delay: 300ms;
+}
+
+.key-glint-3 {
+  animation-delay: 600ms;
+}
+
+@keyframes key-jingle-shake {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--shake));
+  }
+}
+
+@keyframes key-glint {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.3) rotate(0deg);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(1) rotate(45deg);
+  }
 }
 
 @keyframes phone-ring-pulse {
@@ -807,22 +867,26 @@ body:has(.loading-screen:not([data-state="hidden"])) .blueprint::after {
   }
 }
 
-/* The phone's dial (PhoneDial). Hidden, it lets the pointer through to the
-   scene; it stays visible while it shrinks back into the phone. */
-.phone-dial {
+/* The phone's dial (PhoneDial), and the about page's telly and clipboard
+   (TvBio, Clipboard). Hidden, they let the pointer through to the scene; they
+   stay visible while they shrink back into the thing they came out of. */
+.phone-dial,
+.scene-dialog {
   visibility: hidden;
   pointer-events: none;
   transition: visibility 0s 450ms;
 }
 
-.phone-dial[data-open] {
+.phone-dial[data-open],
+.scene-dialog[data-open] {
   visibility: visible;
   pointer-events: auto;
   transition-delay: 0s;
 }
 
 /* It grows out of the phone as the camera pushes in, and shrinks back. */
-.phone-dial-panel {
+.phone-dial-panel,
+.scene-dialog-panel {
   opacity: 0;
   transform: translate(var(--from-x, 0), var(--from-y, 0)) scale(0.12);
   transition:
@@ -830,7 +894,8 @@ body:has(.loading-screen:not([data-state="hidden"])) .blueprint::after {
     opacity 250ms ease 200ms;
 }
 
-.phone-dial[data-open] .phone-dial-panel {
+.phone-dial[data-open] .phone-dial-panel,
+.scene-dialog[data-open] .scene-dialog-panel {
   opacity: 1;
   transform: none;
   transition:
@@ -840,7 +905,9 @@ body:has(.loading-screen:not([data-state="hidden"])) .blueprint::after {
 
 @media (prefers-reduced-motion: reduce) {
   .phone-dial-panel,
-  .phone-dial[data-open] .phone-dial-panel {
+  .phone-dial[data-open] .phone-dial-panel,
+  .scene-dialog-panel,
+  .scene-dialog[data-open] .scene-dialog-panel {
     transform: none;
     transition: opacity 200ms;
   }
@@ -860,4 +927,235 @@ body:has(.loading-screen:not([data-state="hidden"])) .blueprint::after {
 .dial-hole:focus-visible .dial-ring,
 .dial-hole[data-active] .dial-ring {
   stroke: #ffd200;
+}
+
+/* About page: a terrace and its front room (src/components/AboutScene.tsx).
+   Once the scene models the door, the telly, the phone and the keys, their
+   buttons stay over them but show only their focus rings. */
+.about-scene {
+  /* As on the other scenes. */
+  --sign: #00703c;
+}
+
+.about-spot[data-modelled] > svg {
+  visibility: hidden;
+}
+
+/* The pad by the landline: a spiral along the top, a red margin, ruled lines. */
+.phone-notepad {
+  background-color: #fbf8ef;
+  background-image:
+    radial-gradient(circle at 50% 0.55rem, #6b6d73 0 0.22rem, transparent 0.25rem),
+    linear-gradient(90deg, transparent 0 2.4rem, rgb(208 74 60 / 0.45) 2.4rem 2.5rem, transparent 2.5rem),
+    repeating-linear-gradient(180deg, transparent 0 calc(2.05rem - 1px), rgb(70 120 190 / 0.3) calc(2.05rem - 1px) 2.05rem);
+  background-size:
+    1.2rem 1.2rem,
+    auto,
+    auto;
+  background-repeat: repeat-x, no-repeat, repeat;
+  background-position:
+    0.3rem 0,
+    0 0,
+    0 3.65rem;
+}
+
+/* Teletext (TvBio): its colours, a blue band behind double-height
+   headings, and the tube's scanlines and curved glass over it all. */
+.tv-screen {
+  box-shadow:
+    inset 0 0 2.5rem rgb(0 0 0 / 0.9),
+    inset 0 0 0.4rem rgb(0 0 0);
+}
+
+.tv-screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 90% at 30% 15%, rgb(255 255 255 / 0.07), transparent 45%),
+    repeating-linear-gradient(180deg, rgb(0 0 0 / 0.22) 0 1px, transparent 1px 3px);
+  border-radius: inherit;
+}
+
+.tt-red {
+  color: #ff5a4f;
+}
+
+.tt-green {
+  color: #58f06e;
+}
+
+.tt-yellow {
+  color: #fff04a;
+}
+
+.tt-cyan {
+  color: #5ae6ff;
+}
+
+.tt-band {
+  background: #1a2fd0;
+}
+
+.tt-double {
+  display: inline-block;
+  font-size: 1.15em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  transform: scaleY(1.9);
+  transform-origin: top;
+  margin-bottom: 0.9em;
+}
+
+.tt-table {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 1.5ch;
+  row-gap: 0.15em;
+}
+
+.tt-key {
+  font-weight: 700;
+}
+
+/* The about page's clipboard (Clipboard.tsx): a hardboard board with the
+   projects' blueprints under a steel clip. The sheets lie in one stack, the
+   top one flat, the ones under it peeking out askew; a sheet that's been
+   read flips up over the clip, out of sight. The sheets are the projects
+   page's own (see .blueprint above), unpinned, as the clip holds them. */
+.clipboard-board {
+  position: relative;
+  padding: 3rem 1.1rem 1rem;
+  border-radius: 1.1rem;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(255, 230, 190, 0.18), transparent 60%),
+    linear-gradient(160deg, #a8754a, #8d5f37 55%, #7a5030);
+  box-shadow:
+    0 30px 50px -24px rgba(0, 0, 0, 0.7),
+    inset 0 -5px 0 rgba(0, 0, 0, 0.22),
+    inset 0 2px 0 rgba(255, 255, 255, 0.18);
+}
+
+.clipboard-sheets {
+  display: grid;
+  perspective: 1800px;
+}
+
+.clipboard-sheet {
+  --turn: 0deg;
+  --nudge-x: 0rem;
+  --nudge-y: 0rem;
+  position: relative;
+  grid-area: 1 / 1;
+  container-type: inline-size;
+  transform-origin: 50% 0;
+  backface-visibility: hidden;
+  filter: drop-shadow(0.2rem 0.3rem 0.35rem rgba(36, 22, 8, 0.4));
+  transition:
+    transform 650ms cubic-bezier(0.3, 0.7, 0.2, 1),
+    opacity 400ms ease;
+}
+
+.clipboard-sheet .blueprint::before,
+.clipboard-sheet .blueprint::after {
+  display: none;
+}
+
+.clipboard-sheet[data-place="top"] {
+  z-index: 20;
+}
+
+.clipboard-sheet[data-place="under"] {
+  z-index: calc(20 - var(--under));
+  pointer-events: none;
+  transform: translate(calc(var(--under) * 0.4rem), calc(var(--under) * 0.3rem)) rotate(calc(var(--under) * 1.3deg));
+}
+
+.clipboard-sheet[data-place="read"] {
+  z-index: 30;
+  pointer-events: none;
+  opacity: 0;
+  transform: rotateX(165deg);
+}
+
+/* The clip: a steel plate over the sheets' top edge, its lever arching
+   over it. */
+.clipboard-clip {
+  position: absolute;
+  z-index: 40;
+  top: 1.2rem;
+  left: 50%;
+  width: min(11rem, 40%);
+  height: 2.6rem;
+  border-radius: 0.6rem 0.6rem 0.9rem 0.9rem;
+  background: linear-gradient(#eef0f2, #b9bec4 45%, #8f959c);
+  box-shadow:
+    0 6px 8px -3px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.clipboard-clip::before {
+  position: absolute;
+  top: -0.9rem;
+  left: 50%;
+  width: 3.4rem;
+  height: 1.6rem;
+  border: 0.32rem solid #a7adb4;
+  border-bottom: 0;
+  border-radius: 1.6rem 1.6rem 0 0;
+  transform: translateX(-50%);
+  content: "";
+}
+
+.clipboard-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.clipboard-count {
+  color: #fbeedd;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.clipboard-button {
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  background: #f3e6cf;
+  box-shadow: 0 2px 0 rgba(60, 35, 15, 0.45);
+  color: #3a2614;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.clipboard-button:hover {
+  background: #fff3de;
+}
+
+.clipboard-button:focus-visible {
+  outline: 3px solid #ffd200;
+  outline-offset: 2px;
+}
+
+.clipboard-close {
+  display: block;
+  margin: 0.7rem auto 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clipboard-sheet {
+    transition: opacity 200ms;
+  }
+
+  .clipboard-sheet[data-place="read"] {
+    transform: none;
+  }
 }

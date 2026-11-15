@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import { site } from "@/lib/site";
+import { handFont } from "./about/hand";
 
 // What each number on the emergency phone's dial reaches. The directory
 // card beside the dial (and the card inside the phone's door, in
@@ -56,8 +57,35 @@ const wheelPath = [
 
 const GREETING = "Put a finger in a hole and dial.";
 
+// The two phones the dial belongs to: the roadside emergency phone (orange
+// housing, black well, a printed directory card) and the landline in the
+// about page's front room (ivory bakelite, a clear finger plate, numbers
+// jotted down on the pad beside it).
+const THEMES = {
+  emergency: {
+    label: "Emergency phone",
+    housing:
+      "rounded-[2.25rem] bg-[#ec7a1c] p-3 shadow-[0_24px_40px_-20px_rgba(21,22,42,0.6),inset_0_-6px_0_rgba(0,0,0,0.18)] sm:p-4",
+    well: "rounded-[1.75rem] bg-[#1e2024] p-3 shadow-[inset_0_4px_12px_rgba(0,0,0,0.6)] sm:p-4",
+    ring: { fill: "#26282d", stroke: "#15162a" },
+    hole: { wired: "#f2b417", dead: "#f6f3ea" },
+    plate: { fill: "#d9d6ce", stroke: "#8d8f92", shadow: "drop-shadow(0 4px 0 rgba(21,22,42,0.45))" },
+  },
+  home: {
+    label: "Home phone",
+    housing:
+      "rounded-[3rem_3rem_2.25rem_2.25rem] bg-[#e9e0c8] p-4 shadow-[0_24px_40px_-20px_rgba(21,22,42,0.6),inset_0_-8px_0_rgba(120,95,60,0.2),inset_0_3px_0_rgba(255,255,255,0.55)] sm:p-5",
+    well: "rounded-full bg-[#d6cbb0] p-2 shadow-[inset_0_3px_10px_rgba(80,60,30,0.4)] sm:p-3",
+    ring: { fill: "#f4efe2", stroke: "#b9ad90" },
+    hole: { wired: "#f6d77e", dead: "#fbf8f0" },
+    plate: { fill: "rgba(222,212,186,0.9)", stroke: "#a99c7c", shadow: "drop-shadow(0 3px 0 rgba(90,70,40,0.35))" },
+  },
+} as const;
+
 type Props = {
   open: boolean;
+  // Which phone this is the dial of (see THEMES).
+  variant?: keyof typeof THEMES;
   // Where the phone is on screen, for the dial to grow out of.
   origin: { x: number; y: number } | null;
   onClose: () => void;
@@ -65,13 +93,16 @@ type Props = {
   onDial: () => void;
 };
 
-// The emergency phone's dial, brought up when the phone on the contact page
-// is picked up (see LaybyScene): 0 for the CV, 1 for LinkedIn, 2 for GitHub,
+// A phone's dial, brought up when the emergency phone on the contact page
+// is picked up (see LaybyScene), or the landline in the about page's front
+// room (see AboutScene): 0 for the CV, 1 for LinkedIn, 2 for GitHub,
 // each opened in a new tab once the wheel has turned to the stop and come
 // back to rest. Each wired hole
 // is a real link, so it still works without the animation; the number keys
 // dial too, and Escape hangs up.
-export default function PhoneDial({ open, origin, onClose, onDial }: Props) {
+export default function PhoneDial({ open, origin, onClose, onDial, variant = "emergency" }: Props) {
+  const theme = THEMES[variant];
+  const home = variant === "home";
   const wheelRef = useRef<SVGGElement>(null);
   const firstRef = useRef<HTMLAnchorElement>(null);
   const busy = useRef(false);
@@ -177,7 +208,7 @@ export default function PhoneDial({ open, origin, onClose, onDial }: Props) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Emergency phone"
+      aria-label={theme.label}
       inert={!open}
       data-open={open || undefined}
       className="phone-dial group/dial fixed inset-0 z-50 grid place-items-center overflow-y-auto p-4"
@@ -194,8 +225,8 @@ export default function PhoneDial({ open, origin, onClose, onDial }: Props) {
         className="phone-dial-panel relative flex flex-col items-center gap-5 sm:flex-row sm:items-center sm:gap-8"
       >
         {/* The phone's housing, round the dial. */}
-        <div data-phone-housing className="relative rounded-[2.25rem] bg-[#ec7a1c] p-3 shadow-[0_24px_40px_-20px_rgba(21,22,42,0.6),inset_0_-6px_0_rgba(0,0,0,0.18)] sm:p-4">
-          <div className="rounded-[1.75rem] bg-[#1e2024] p-3 shadow-[inset_0_4px_12px_rgba(0,0,0,0.6)] sm:p-4">
+        <div data-phone-housing className={`relative ${theme.housing}`}>
+          <div className={theme.well}>
             <svg
               viewBox="-160 -160 320 320"
               className="block w-[min(76vw,44vh,21rem)] touch-manipulation select-none"
@@ -205,13 +236,13 @@ export default function PhoneDial({ open, origin, onClose, onDial }: Props) {
               {/* The number ring, under the wheel, showing through the
                   holes. The wired numbers are yellow. */}
               {/* Drawn in flat inks, like the phone in the scene: no chrome. */}
-              <circle r="154" fill="#26282d" stroke="#15162a" strokeWidth="3" />
+              <circle r="154" fill={theme.ring.fill} stroke={theme.ring.stroke} strokeWidth="3" />
               {DIGITS.map((digit) => {
                 const { x, y } = at(holeAngle(digit), HOLE_RING);
                 const wired = !!lineFor(digit);
                 return (
                   <g key={digit} aria-hidden>
-                    <circle cx={x} cy={y} r={HOLE - 2} fill={wired ? "#f2b417" : "#f6f3ea"} />
+                    <circle cx={x} cy={y} r={HOLE - 2} fill={wired ? theme.hole.wired : theme.hole.dead} />
                     <text
                       x={x}
                       y={y}
@@ -235,10 +266,10 @@ export default function PhoneDial({ open, origin, onClose, onDial }: Props) {
                 <path
                   d={wheelPath}
                   fillRule="evenodd"
-                  fill="#d9d6ce"
-                  stroke="#8d8f92"
+                  fill={theme.plate.fill}
+                  stroke={theme.plate.stroke}
                   strokeWidth="2"
-                  style={{ filter: "drop-shadow(0 4px 0 rgba(21,22,42,0.45))" }}
+                  style={{ filter: theme.plate.shadow }}
                 />
                 {DIGITS.map((digit) => {
                   const { x, y } = at(holeAngle(digit), HOLE_RING);
@@ -276,69 +307,127 @@ export default function PhoneDial({ open, origin, onClose, onDial }: Props) {
                 <path d="M-7 -158h14l-3 44h-8z" fill="#d9dbde" stroke="#5d6166" strokeWidth="2" strokeLinejoin="round" />
               </g>
 
-              {/* The hub, which stays put. */}
-              <g aria-hidden>
-                <circle r={HUB - 6} fill="#f6f3ea" stroke="#151515" strokeWidth="2" />
-                <text y="-8" textAnchor="middle" fontSize="26" fontWeight="800" fill="#d4312a" className="font-sans">
-                  SOS
-                </text>
-                <text y="18" textAnchor="middle" fontSize="11" fontWeight="700" letterSpacing="1.5" fill="#151515" className="font-sans">
-                  LAY-BY T1
-                </text>
-              </g>
+              {/* The hub, which stays put: the emergency phone's SOS plate,
+                  or the house phone's own number on a card. */}
+              {home ? (
+                <g aria-hidden>
+                  <circle r={HUB - 6} fill="#fbf8f0" stroke="#2a2622" strokeWidth="2" />
+                  <text y="-2" textAnchor="middle" fontSize="30" fontWeight="700" fill="#b03a2e" className={handFont.className}>
+                    Home
+                  </text>
+                  <text y="22" textAnchor="middle" fontSize="12" fontWeight="600" letterSpacing="1" fill="#2a2622" className="font-mono">
+                    01382 011
+                  </text>
+                </g>
+              ) : (
+                <g aria-hidden>
+                  <circle r={HUB - 6} fill="#f6f3ea" stroke="#151515" strokeWidth="2" />
+                  <text y="-8" textAnchor="middle" fontSize="26" fontWeight="800" fill="#d4312a" className="font-sans">
+                    SOS
+                  </text>
+                  <text y="18" textAnchor="middle" fontSize="11" fontWeight="700" letterSpacing="1.5" fill="#151515" className="font-sans">
+                    LAY-BY T1
+                  </text>
+                </g>
+              )}
             </svg>
           </div>
         </div>
 
-        {/* The directory card: which number goes where. */}
-        <div className="w-[min(76vw,18rem)] rotate-[-1.5deg] rounded-md bg-[#f6f3ea] p-5 text-[#151515] shadow-[0_20px_40px_-16px_rgba(0,0,0,0.55)] sm:w-64">
-          <p className="border-b-[3px] border-[#151515] pb-2 text-sm font-extrabold tracking-[0.2em] uppercase">Dial</p>
-          <ul className="mt-3 space-y-2.5">
-            {LINES.map((line) => (
-              <li
-                key={line.digit}
-                data-active={dialling === line.digit || undefined}
-                className="flex items-center gap-3 rounded-md transition-colors data-active:bg-[#f2b417]/35"
-              >
-                <span
-                  aria-hidden
-                  className="grid size-9 shrink-0 place-items-center rounded-full bg-[#f2b417] text-lg font-extrabold ring-2 ring-[#151515]"
+        {/* The pad by the phone: the numbers, jotted down in biro. */}
+        {home ? (
+          <div
+            className={`${handFont.className} phone-notepad relative w-[min(76vw,18rem)] rotate-[1.5deg] rounded-sm px-5 pt-7 pb-5 text-[#24306e] shadow-[0_20px_40px_-16px_rgba(0,0,0,0.55)] sm:w-64`}
+          >
+            <p className="text-[1.7rem] leading-none font-bold text-[#b03a2e]">Phone numbers</p>
+            <ul className="mt-3">
+              {LINES.map((line) => (
+                <li
+                  key={line.digit}
+                  data-active={dialling === line.digit || undefined}
+                  className="flex items-baseline gap-3 rounded-sm text-2xl leading-[2.05rem] transition-colors data-active:bg-[#f6d77e]/45"
                 >
-                  {line.digit}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-bold">
+                  <span aria-hidden className="w-5 shrink-0 text-center font-bold">
+                    {line.digit}
+                  </span>
+                  <span className="min-w-0 flex-1">
                     <span className="sr-only">{line.digit}: </span>
                     {line.name}
                   </span>
-                  <span className="block text-xs text-[#151515]/65">{line.detail}</span>
-                </span>
-                {/* Dialling 0 opens the CV to read once the wheel has come
-                    back round; this saves a copy at once, which a phone's
-                    built-in PDF viewer doesn't make obvious. */}
-                {line.digit === 0 && (
-                  <a
-                    href={site.cv}
-                    download={CV_FILENAME}
-                    className="shrink-0 rounded-full bg-[#151515] px-3 py-1.5 text-xs text-[#f6f3ea] transition-colors hover:bg-[#d4312a] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#ffd200]"
+                  {line.digit === 0 && (
+                    <a
+                      href={site.cv}
+                      download={CV_FILENAME}
+                      className="shrink-0 rounded-sm text-lg font-bold underline decoration-2 underline-offset-2 hover:text-[#b03a2e] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#ffd200]"
+                    >
+                      save<span className="sr-only"> my CV as a PDF</span>
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p aria-live="polite" className="mt-3 min-h-[2.5em] font-sans text-xs leading-snug text-[#2a2622]/75">
+              {status}
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-3 w-full rounded-full bg-[#e9e0c8] px-4 py-2 font-sans text-sm text-[#2a2622] shadow-[inset_0_-3px_0_rgba(120,95,60,0.25)] ring-1 ring-[#b9ad90] transition-colors hover:bg-[#b03a2e] hover:text-[#fbf8f0] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#ffd200]"
+            >
+              Put the phone down <span className="opacity-60">(Esc)</span>
+            </button>
+          </div>
+        ) : (
+          // The directory card: which number goes where.
+          <div className="w-[min(76vw,18rem)] rotate-[-1.5deg] rounded-md bg-[#f6f3ea] p-5 text-[#151515] shadow-[0_20px_40px_-16px_rgba(0,0,0,0.55)] sm:w-64">
+            <p className="border-b-[3px] border-[#151515] pb-2 text-sm font-extrabold tracking-[0.2em] uppercase">Dial</p>
+            <ul className="mt-3 space-y-2.5">
+              {LINES.map((line) => (
+                <li
+                  key={line.digit}
+                  data-active={dialling === line.digit || undefined}
+                  className="flex items-center gap-3 rounded-md transition-colors data-active:bg-[#f2b417]/35"
+                >
+                  <span
+                    aria-hidden
+                    className="grid size-9 shrink-0 place-items-center rounded-full bg-[#f2b417] text-lg font-extrabold ring-2 ring-[#151515]"
                   >
-                    Download<span className="sr-only"> my CV as a PDF</span>
-                  </a>
-                )}
-              </li>
-            ))}
-          </ul>
-          <p aria-live="polite" className="mt-4 min-h-[2.5em] text-xs leading-snug text-[#151515]/75">
-            {status}
-          </p>
-          <button
-            type="button"
-            onClick={onClose}
-            className="mt-3 w-full rounded-full bg-[#151515] px-4 py-2 text-sm font-semibold text-[#f6f3ea] transition-colors hover:bg-[#d4312a] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#ffd200]"
-          >
-            Hang up <span className="font-normal opacity-60">(Esc)</span>
-          </button>
-        </div>
+                    {line.digit}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-bold">
+                      <span className="sr-only">{line.digit}: </span>
+                      {line.name}
+                    </span>
+                    <span className="block text-xs text-[#151515]/65">{line.detail}</span>
+                  </span>
+                  {/* Dialling 0 opens the CV to read once the wheel has come
+                      back round; this saves a copy at once, which a phone's
+                      built-in PDF viewer doesn't make obvious. */}
+                  {line.digit === 0 && (
+                    <a
+                      href={site.cv}
+                      download={CV_FILENAME}
+                      className="shrink-0 rounded-full bg-[#151515] px-3 py-1.5 text-xs text-[#f6f3ea] transition-colors hover:bg-[#d4312a] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#ffd200]"
+                    >
+                      Download<span className="sr-only"> my CV as a PDF</span>
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p aria-live="polite" className="mt-4 min-h-[2.5em] text-xs leading-snug text-[#151515]/75">
+              {status}
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-3 w-full rounded-full bg-[#151515] px-4 py-2 text-sm font-semibold text-[#f6f3ea] transition-colors hover:bg-[#d4312a] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#ffd200]"
+            >
+              Hang up <span className="font-normal opacity-60">(Esc)</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
